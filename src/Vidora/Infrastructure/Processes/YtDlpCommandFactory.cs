@@ -4,5 +4,5 @@ public static class YtDlpCommandFactory
 {
     public static ProcessSpec BuildDiscoverySpec(string ytDlpPath, string url) => new(
         ytDlpPath,
-        ["--dump-single-json", "--skip-download", "--no-playlist", "--", url]);
+        ["--ignore-config", "--dump-single-json", "--skip-download", "--no-playlist", "--", url]);
 }

@@ -22,10 +22,12 @@
     <system:String x:Key="Error.DiscoveryTimeout">Quá thời gian lấy thông tin video.</system:String>
     <system:String x:Key="Error.DependencyMissing">Thiếu công cụ cần thiết.</system:String>
     <system:String x:Key="Error.DependencyInvalid">Công cụ cần thiết không hoạt động.</system:String>
+    <system:String x:Key="Error.UnsupportedContent">Livestream và danh sách video chưa được hỗ trợ.</system:String>
     <system:String x:Key="Action.CheckUrl">Kiểm tra lại liên kết.</system:String>
     <system:String x:Key="Action.UseSupportedSource">Dùng liên kết YouTube, Facebook, Instagram hoặc TikTok.</system:String>
     <system:String x:Key="Action.TryAgain">Thử lại.</system:String>
     <system:String x:Key="Action.OpenSettings">Mở Cài đặt để kiểm tra công cụ.</system:String>
+    <system:String x:Key="Action.UsePublicVideo">Dùng liên kết của một video công khai.</system:String>
     <system:String x:Key="Settings.Title">Cài đặt</system:String>
     <system:String x:Key="Dependency.Description">Kiểm tra các công cụ cần thiết để tải và xử lý video.</system:String>
     <system:String x:Key="Dependency.YtDlp">yt-dlp</system:String>

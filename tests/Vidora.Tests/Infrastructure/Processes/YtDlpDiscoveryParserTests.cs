@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Vidora.Core.Errors;
 using Vidora.Core.Models;
 using Vidora.Core.Services;
@@ -53,6 +54,48 @@ public sealed class YtDlpDiscoveryParserTests
     }
 
     [TestMethod]
+    [DataRow("1e309")]
+    [DataRow("-1")]
+    public void Parse_InvalidDuration_TreatsDurationAsUnavailable(string duration)
+    {
+        var json = $$"""
+            { "id": "abc123", "title": "Video", "extractor_key": "Youtube", "duration": {{duration}} }
+            """;
+
+        var metadata = YtDlpDiscoveryParser.Parse(json, "https://youtu.be/abc123");
+
+        Assert.IsNull(metadata.Duration);
+    }
+
+    [TestMethod]
+    [DataRow("{ \"id\": \"live\", \"title\": \"Live\", \"extractor_key\": \"Youtube\", \"is_live\": true }")]
+    [DataRow("{ \"id\": \"upcoming\", \"title\": \"Upcoming\", \"extractor_key\": \"Youtube\", \"live_status\": \"is_upcoming\" }")]
+    [DataRow("{ \"id\": \"collection\", \"title\": \"Collection\", \"extractor_key\": \"Youtube\", \"_type\": \"playlist\", \"entries\": [] }")]
+    public void Parse_LiveOrCollectionMetadata_ThrowsStableUnsupportedContentError(string json)
+    {
+        var exception = Assert.Throws<VidoraException>(
+            () => YtDlpDiscoveryParser.Parse(json, "https://youtube.com/watch?v=abc123"));
+
+        Assert.AreEqual(VidoraErrorCode.Unavailable, exception.Error.Code);
+        Assert.AreEqual("Error.UnsupportedContent", exception.Error.UserMessageKey);
+    }
+
+    [TestMethod]
+    [DataRow("file:///C:/Users/example/thumb.jpg")]
+    [DataRow("file://remotehost/share/thumb.jpg")]
+    [DataRow("ftp://example.test/thumb.jpg")]
+    public void Parse_NonWebThumbnail_DoesNotExposeUriToPreview(string thumbnail)
+    {
+        var json = $$"""
+            { "id": "abc123", "title": "Video", "extractor_key": "Youtube", "thumbnail": "{{thumbnail}}" }
+            """;
+
+        var metadata = YtDlpDiscoveryParser.Parse(json, "https://youtu.be/abc123");
+
+        Assert.IsNull(metadata.ThumbnailUrl);
+    }
+
+    [TestMethod]
     public async Task DiscoverAsync_ReadyDependencies_RunsExactCommandAndParsesOutput()
     {
         ProcessSpec? capturedSpec = null;
@@ -71,8 +114,25 @@ public sealed class YtDlpDiscoveryParserTests
         Assert.AreEqual("abc123", metadata.MediaId);
         Assert.IsNotNull(capturedSpec);
         CollectionAssert.AreEqual(
-            new[] { "--dump-single-json", "--skip-download", "--no-playlist", "--", "https://youtu.be/abc123" },
+            new[] { "--ignore-config", "--dump-single-json", "--skip-download", "--no-playlist", "--", "https://youtu.be/abc123" },
             capturedSpec.Arguments.ToArray());
+    }
+
+    [TestMethod]
+    public async Task DiscoverAsync_ProcessStartFailure_ThrowsStableDependencyError()
+    {
+        var runner = new FakeProcessRunner((_, _) =>
+            Task.FromException<ProcessResult>(new Win32Exception("Executable disappeared.")));
+        var service = new VideoDiscoveryService(
+            runner,
+            new FakeDependencyService(ReadyReport()),
+            new AppToolPaths("missing-yt-dlp.exe", "C:\\tools\\ffmpeg.exe"));
+
+        var exception = await Assert.ThrowsAsync<VidoraException>(
+            () => service.DiscoverAsync("https://youtu.be/abc123", CancellationToken.None));
+
+        Assert.AreEqual(VidoraErrorCode.DependencyInvalid, exception.Error.Code);
+        Assert.AreEqual("Error.DependencyInvalid", exception.Error.UserMessageKey);
     }
 
     [TestMethod]

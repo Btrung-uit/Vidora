@@ -59,7 +59,7 @@ public sealed class SupportedUrlValidatorTests
 
         Assert.AreEqual("C:\\tools\\yt-dlp.exe", spec.FileName);
         CollectionAssert.AreEqual(
-            new[] { "--dump-single-json", "--skip-download", "--no-playlist", "--", url },
+            new[] { "--ignore-config", "--dump-single-json", "--skip-download", "--no-playlist", "--", url },
             spec.Arguments.ToArray());
         Assert.AreEqual(1, spec.Arguments.Count(argument => argument == url));
     }

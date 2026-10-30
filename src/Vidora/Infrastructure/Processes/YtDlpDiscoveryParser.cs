@@ -12,6 +12,7 @@ public static class YtDlpDiscoveryParser
         {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
+            RejectUnsupportedContent(root);
 
             return new VideoMetadata(
                 new Uri(sourceUrl, UriKind.Absolute),
@@ -19,13 +20,36 @@ public static class YtDlpDiscoveryParser
                 RequiredString(root, "id"),
                 RequiredString(root, "title"),
                 OptionalString(root, "uploader"),
-                OptionalDouble(root, "duration") is { } seconds ? TimeSpan.FromSeconds(seconds) : null,
+                OptionalDuration(root, "duration"),
                 OptionalUri(root, "thumbnail"),
                 ParseFormats(root));
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException or FormatException)
         {
             throw DiscoveryFailure(exception);
+        }
+    }
+
+    private static void RejectUnsupportedContent(JsonElement root)
+    {
+        var type = OptionalString(root, "_type");
+        var liveStatus = OptionalString(root, "live_status");
+        var isLive = root.TryGetProperty("is_live", out var isLiveValue) &&
+                     isLiveValue.ValueKind == JsonValueKind.True;
+        var isCollection = root.TryGetProperty("entries", out var entries) &&
+                           entries.ValueKind == JsonValueKind.Array;
+
+        if (isLive ||
+            liveStatus is "is_live" or "is_upcoming" ||
+            type is "playlist" or "multi_video" ||
+            isCollection)
+        {
+            throw new VidoraException(new VidoraError(
+                VidoraErrorCode.Unavailable,
+                "Error.UnsupportedContent",
+                "Action.UsePublicVideo",
+                "Livestreams and collections are outside the Vidora MVP scope.",
+                false));
         }
     }
 
@@ -84,6 +108,24 @@ public static class YtDlpDiscoveryParser
             ? result
             : null;
 
+    private static TimeSpan? OptionalDuration(JsonElement element, string propertyName)
+    {
+        var seconds = OptionalDouble(element, propertyName);
+        if (seconds is null || !double.IsFinite(seconds.Value) || seconds.Value < 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            return TimeSpan.FromSeconds(seconds.Value);
+        }
+        catch (OverflowException)
+        {
+            return null;
+        }
+    }
+
     private static int? OptionalInt32(JsonElement element, string propertyName) =>
         element.TryGetProperty(propertyName, out var value) &&
         value.ValueKind == JsonValueKind.Number &&
@@ -100,7 +142,8 @@ public static class YtDlpDiscoveryParser
 
     private static Uri? OptionalUri(JsonElement element, string propertyName) =>
         OptionalString(element, propertyName) is { } value &&
-        Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
             ? uri
             : null;
 

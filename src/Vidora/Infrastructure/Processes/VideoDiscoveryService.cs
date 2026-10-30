@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.IO;
 using Vidora.Core.Errors;
 using Vidora.Core.Models;
 using Vidora.Core.Services;
@@ -40,6 +42,16 @@ public sealed class VideoDiscoveryService(
                 "Action.TryAgain",
                 "Metadata discovery exceeded the 30-second timeout.",
                 true));
+        }
+        catch (Exception exception) when (
+            exception is Win32Exception or IOException or InvalidOperationException)
+        {
+            throw new VidoraException(new VidoraError(
+                VidoraErrorCode.DependencyInvalid,
+                "Error.DependencyInvalid",
+                "Action.OpenSettings",
+                exception.Message,
+                false));
         }
 
         if (result.ExitCode != 0)
