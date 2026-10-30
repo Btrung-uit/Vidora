@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:download="clr-namespace:Vidora.Features.Download"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:settings="clr-namespace:Vidora.Features.Settings"
         xmlns:shell="clr-namespace:Vidora.Features.Shell"
@@ -48,21 +49,35 @@
                 Background="{DynamicResource Content.BackgroundBrush}"
                 CornerRadius="12">
             <Grid>
+                <download:DownloadView x:Name="DownloadContent">
+                    <download:DownloadView.Style>
+                        <Style TargetType="download:DownloadView">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.CurrentPage, RelativeSource={RelativeSource AncestorType=Window}}"
+                                             Value="{x:Static shell:ShellPage.History}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding DataContext.CurrentPage, RelativeSource={RelativeSource AncestorType=Window}}"
+                                             Value="{x:Static shell:ShellPage.Settings}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </download:DownloadView.Style>
+                </download:DownloadView>
+
                 <ContentControl HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
                                 FontSize="28"
                                 FontWeight="SemiBold">
                     <ContentControl.Style>
                         <Style TargetType="ContentControl">
-                            <Setter Property="Content" Value="{DynamicResource Page.Download}" />
+                            <Setter Property="Visibility" Value="Collapsed" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding CurrentPage}"
                                              Value="{x:Static shell:ShellPage.History}">
                                     <Setter Property="Content" Value="{DynamicResource Page.History}" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding CurrentPage}"
-                                             Value="{x:Static shell:ShellPage.Settings}">
-                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Setter Property="Visibility" Value="Visible" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>

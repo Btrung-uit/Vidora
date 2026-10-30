@@ -1,0 +1,28 @@
+{
+  "id": "abc123",
+  "title": "A complete video",
+  "uploader": "Vidora Fixtures",
+  "duration": 125.5,
+  "thumbnail": "https://example.test/thumb.jpg",
+  "extractor_key": "Youtube",
+  "formats": [
+    {
+      "format_id": "137",
+      "ext": "mp4",
+      "width": 1920,
+      "height": 1080,
+      "vcodec": "avc1.640028",
+      "acodec": "none",
+      "filesize": 10000000
+    },
+    {
+      "format_id": "140",
+      "ext": "m4a",
+      "width": null,
+      "height": null,
+      "vcodec": "none",
+      "acodec": "mp4a.40.2",
+      "filesize_approx": 2000000
+    }
+  ]
+}

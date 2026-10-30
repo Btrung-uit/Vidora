@@ -1,6 +1,7 @@
 using System.Windows;
 using Vidora.Core.Models;
 using Vidora.Core.Services;
+using Vidora.Features.Download;
 using Vidora.Features.Settings;
 using Vidora.Features.Shell;
 
@@ -68,7 +69,10 @@ public sealed class MainWindowViewModelTests
 
         var shellViewModel = new MainWindowViewModel();
         var settingsViewModel = new SettingsViewModel(new StubDependencyService());
-        var window = new MainWindow(shellViewModel, settingsViewModel);
+        var window = new MainWindow(
+            shellViewModel,
+            new DownloadViewModel(new StubDiscoveryService()),
+            settingsViewModel);
 
         try
         {
@@ -89,6 +93,12 @@ public sealed class MainWindowViewModelTests
     private sealed class StubDependencyService : IDependencyService
     {
         public Task<DependencyReport> CheckAsync(CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class StubDiscoveryService : IVideoDiscoveryService
+    {
+        public Task<VideoMetadata> DiscoverAsync(string url, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
     }
 }
