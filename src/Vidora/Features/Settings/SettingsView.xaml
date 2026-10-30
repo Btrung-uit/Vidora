@@ -1,0 +1,58 @@
+<UserControl x:Class="Vidora.Features.Settings.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="clr-namespace:Vidora.Core.Models">
+    <UserControl.Resources>
+        <Style x:Key="DependencyStatusStyle" TargetType="TextBlock">
+            <Setter Property="Text" Value="{DynamicResource Dependency.Status.Checking}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Status}" Value="{x:Static models:DependencyStatus.Ready}">
+                    <Setter Property="Text" Value="{DynamicResource Dependency.Status.Ready}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="{x:Static models:DependencyStatus.Missing}">
+                    <Setter Property="Text" Value="{DynamicResource Dependency.Status.Missing}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="{x:Static models:DependencyStatus.Invalid}">
+                    <Setter Property="Text" Value="{DynamicResource Dependency.Status.Invalid}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="560">
+        <TextBlock Margin="0,0,0,8"
+                   FontSize="28"
+                   FontWeight="SemiBold"
+                   Text="{DynamicResource Settings.Title}" />
+        <TextBlock Margin="0,0,0,24"
+                   Text="{DynamicResource Dependency.Description}"
+                   TextWrapping="Wrap" />
+
+        <Border Margin="0,0,0,12" Padding="16" BorderBrush="#FFD1D5DB" BorderThickness="1" CornerRadius="8">
+            <StackPanel DataContext="{Binding Report.YtDlp}">
+                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource Dependency.YtDlp}" />
+                <TextBlock Margin="0,4,0,0" Style="{StaticResource DependencyStatusStyle}" />
+                <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+                    <TextBlock Margin="0,0,4,0" Text="{DynamicResource Dependency.Version}" />
+                    <TextBlock Text="{Binding Version}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <Border Margin="0,0,0,16" Padding="16" BorderBrush="#FFD1D5DB" BorderThickness="1" CornerRadius="8">
+            <StackPanel DataContext="{Binding Report.Ffmpeg}">
+                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource Dependency.Ffmpeg}" />
+                <TextBlock Margin="0,4,0,0" Style="{StaticResource DependencyStatusStyle}" />
+                <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
+                    <TextBlock Margin="0,0,4,0" Text="{DynamicResource Dependency.Version}" />
+                    <TextBlock Text="{Binding Version}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <Button HorizontalAlignment="Left"
+                Padding="12,8"
+                Content="{DynamicResource Dependency.CheckAgain}"
+                Command="{Binding CheckDependenciesCommand}" />
+    </StackPanel>
+</UserControl>
