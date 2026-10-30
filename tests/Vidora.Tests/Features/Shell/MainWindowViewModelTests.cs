@@ -1,3 +1,7 @@
+using System.Windows;
+using Vidora.Core.Models;
+using Vidora.Core.Services;
+using Vidora.Features.Settings;
 using Vidora.Features.Shell;
 
 namespace Vidora.Tests.Features.Shell;
@@ -50,5 +54,41 @@ public sealed class MainWindowViewModelTests
 
         Assert.AreEqual(ShellPage.Download, viewModel.CurrentPage);
         Assert.AreEqual(0, stateTransitions);
+    }
+
+    [STATestMethod]
+    [DoNotParallelize]
+    public void NavigateCommand_Settings_ShowsSettingsView()
+    {
+        if (Application.Current is null)
+        {
+            var application = new App();
+            application.InitializeComponent();
+        }
+
+        var shellViewModel = new MainWindowViewModel();
+        var settingsViewModel = new SettingsViewModel(new StubDependencyService());
+        var window = new MainWindow(shellViewModel, settingsViewModel);
+
+        try
+        {
+            window.Show();
+            shellViewModel.NavigateCommand.Execute(ShellPage.Settings);
+            window.UpdateLayout();
+
+            var settingsView = LogicalTreeHelper.FindLogicalNode(window, "SettingsContent") as SettingsView;
+            Assert.IsNotNull(settingsView);
+            Assert.AreEqual(Visibility.Visible, settingsView.Visibility);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private sealed class StubDependencyService : IDependencyService
+    {
+        public Task<DependencyReport> CheckAsync(CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 }

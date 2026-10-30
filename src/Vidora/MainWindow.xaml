@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:settings="clr-namespace:Vidora.Features.Settings"
         xmlns:shell="clr-namespace:Vidora.Features.Shell"
         mc:Ignorable="d"
         Title="{DynamicResource App.Title}"
@@ -46,26 +47,42 @@
                 Padding="32"
                 Background="{DynamicResource Content.BackgroundBrush}"
                 CornerRadius="12">
-            <ContentControl HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            FontSize="28"
-                            FontWeight="SemiBold">
-                <ContentControl.Style>
-                    <Style TargetType="ContentControl">
-                        <Setter Property="Content" Value="{DynamicResource Page.Download}" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding CurrentPage}"
-                                         Value="{x:Static shell:ShellPage.History}">
-                                <Setter Property="Content" Value="{DynamicResource Page.History}" />
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding CurrentPage}"
-                                         Value="{x:Static shell:ShellPage.Settings}">
-                                <Setter Property="Content" Value="{DynamicResource Page.Settings}" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </ContentControl.Style>
-            </ContentControl>
+            <Grid>
+                <ContentControl HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontSize="28"
+                                FontWeight="SemiBold">
+                    <ContentControl.Style>
+                        <Style TargetType="ContentControl">
+                            <Setter Property="Content" Value="{DynamicResource Page.Download}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding CurrentPage}"
+                                             Value="{x:Static shell:ShellPage.History}">
+                                    <Setter Property="Content" Value="{DynamicResource Page.History}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding CurrentPage}"
+                                             Value="{x:Static shell:ShellPage.Settings}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ContentControl.Style>
+                </ContentControl>
+
+                <settings:SettingsView x:Name="SettingsContent">
+                    <settings:SettingsView.Style>
+                        <Style TargetType="settings:SettingsView">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.CurrentPage, RelativeSource={RelativeSource AncestorType=Window}}"
+                                             Value="{x:Static shell:ShellPage.Settings}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </settings:SettingsView.Style>
+                </settings:SettingsView>
+            </Grid>
         </Border>
     </Grid>
 </Window>

@@ -8,4 +8,14 @@
     <system:String x:Key="Page.Download">Tải xuống</system:String>
     <system:String x:Key="Page.History">Lịch sử</system:String>
     <system:String x:Key="Page.Settings">Cài đặt</system:String>
+    <system:String x:Key="Settings.Title">Cài đặt</system:String>
+    <system:String x:Key="Dependency.Description">Kiểm tra các công cụ cần thiết để tải và xử lý video.</system:String>
+    <system:String x:Key="Dependency.YtDlp">yt-dlp</system:String>
+    <system:String x:Key="Dependency.Ffmpeg">FFmpeg</system:String>
+    <system:String x:Key="Dependency.Version">Phiên bản:</system:String>
+    <system:String x:Key="Dependency.Status.Checking">Đang kiểm tra...</system:String>
+    <system:String x:Key="Dependency.Status.Ready">Sẵn sàng</system:String>
+    <system:String x:Key="Dependency.Status.Missing">Chưa được cài đặt</system:String>
+    <system:String x:Key="Dependency.Status.Invalid">Không thể sử dụng</system:String>
+    <system:String x:Key="Dependency.CheckAgain">_Kiểm tra lại</system:String>
 </ResourceDictionary>
