@@ -68,6 +68,39 @@ public sealed class ProcessRunnerTests
             () => new ProcessRunner().RunAsync(spec, null, cancellation.Token));
     }
 
+    [TestMethod]
+    public async Task RunAsync_CancellationAfterParentExit_DoesNotReturnSuccess()
+    {
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        var spec = Cmd("start /b ping.exe -n 5 127.0.0.1 & exit /b 0");
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => new ProcessRunner().RunAsync(spec, null, cancellation.Token));
+    }
+
+    [TestMethod]
+    public async Task RunAsync_CancellationWhileRunning_TerminatesProcessTree()
+    {
+        var directory = Directory.CreateTempSubdirectory("vidora-cancel-test-");
+        var survivedMarker = Path.Combine(directory.FullName, "survived.txt");
+
+        try
+        {
+            using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+            var spec = Cmd($"ping.exe -n 3 127.0.0.1 >nul & echo survived>\"{survivedMarker}\"");
+
+            await Assert.ThrowsAsync<OperationCanceledException>(
+                () => new ProcessRunner().RunAsync(spec, null, cancellation.Token));
+            await Task.Delay(TimeSpan.FromSeconds(2.5));
+
+            Assert.IsFalse(File.Exists(survivedMarker), "A descendant continued after process-tree cancellation.");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     private static ProcessSpec Cmd(string command) => new(
         Environment.GetEnvironmentVariable("ComSpec")!,
         ["/d", "/s", "/c", command]);

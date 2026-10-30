@@ -5,6 +5,8 @@ namespace Vidora.Infrastructure.Processes;
 
 public sealed class ProcessRunner : IProcessRunner
 {
+    private static readonly TimeSpan TerminationTimeout = TimeSpan.FromSeconds(2);
+
     public async Task<ProcessResult> RunAsync(
         ProcessSpec spec,
         IProgress<ProcessOutputLine>? output,
@@ -26,28 +28,33 @@ public sealed class ProcessRunner : IProcessRunner
         var standardOutputTask = ReadLinesAsync(
             process.StandardOutput,
             ProcessOutputStream.StandardOutput,
-            output);
+            output,
+            cancellationToken);
         var standardErrorTask = ReadLinesAsync(
             process.StandardError,
             ProcessOutputStream.StandardError,
-            output);
+            output,
+            cancellationToken);
 
         try
         {
-            await process.WaitForExitAsync(cancellationToken);
+            await Task.WhenAll(
+                    process.WaitForExitAsync(CancellationToken.None),
+                    standardOutputTask,
+                    standardErrorTask)
+                .WaitAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await TerminateAsync(process);
-            await Task.WhenAll(standardOutputTask, standardErrorTask);
+            await TerminateAsync(process, standardOutputTask, standardErrorTask);
             throw;
         }
 
-        await Task.WhenAll(standardOutputTask, standardErrorTask);
         return new ProcessResult(
             process.ExitCode,
-            standardOutputTask.Result,
-            standardErrorTask.Result);
+            await standardOutputTask,
+            await standardErrorTask);
     }
 
     private static ProcessStartInfo CreateStartInfo(ProcessSpec spec)
@@ -71,10 +78,11 @@ public sealed class ProcessRunner : IProcessRunner
     private static async Task<IReadOnlyList<string>> ReadLinesAsync(
         StreamReader reader,
         ProcessOutputStream stream,
-        IProgress<ProcessOutputLine>? output)
+        IProgress<ProcessOutputLine>? output,
+        CancellationToken cancellationToken)
     {
         var lines = new List<string>();
-        while (await reader.ReadLineAsync() is { } line)
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
         {
             lines.Add(line);
             output?.Report(new ProcessOutputLine(line, stream));
@@ -83,7 +91,10 @@ public sealed class ProcessRunner : IProcessRunner
         return lines;
     }
 
-    private static async Task TerminateAsync(Process process)
+    private static async Task TerminateAsync(
+        Process process,
+        Task standardOutputTask,
+        Task standardErrorTask)
     {
         try
         {
@@ -94,9 +105,39 @@ public sealed class ProcessRunner : IProcessRunner
         }
         catch (InvalidOperationException)
         {
-            return;
         }
+        finally
+        {
+            await WaitForExitWithinTimeoutAsync(process);
+            process.StandardOutput.Dispose();
+            process.StandardError.Dispose();
+            await DrainWithinTimeoutAsync(standardOutputTask, standardErrorTask);
+        }
+    }
 
-        await process.WaitForExitAsync(CancellationToken.None);
+    private static async Task WaitForExitWithinTimeoutAsync(Process process)
+    {
+        try
+        {
+            await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TerminationTimeout);
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (TimeoutException)
+        {
+        }
+    }
+
+    private static async Task DrainWithinTimeoutAsync(params Task[] streamTasks)
+    {
+        try
+        {
+            await Task.WhenAll(streamTasks).WaitAsync(TerminationTimeout);
+        }
+        catch (Exception exception) when (
+            exception is IOException or InvalidOperationException or OperationCanceledException or TimeoutException)
+        {
+        }
     }
 }
