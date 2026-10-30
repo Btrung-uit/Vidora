@@ -1,0 +1,71 @@
+<Window x:Class="Vidora.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:shell="clr-namespace:Vidora.Features.Shell"
+        mc:Ignorable="d"
+        Title="{DynamicResource App.Title}"
+        Width="960"
+        Height="600"
+        MinWidth="720"
+        MinHeight="480"
+        WindowStartupLocation="CenterScreen">
+    <Grid Background="{DynamicResource App.BackgroundBrush}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0"
+                Padding="16"
+                Background="{DynamicResource Navigation.BackgroundBrush}">
+            <StackPanel>
+            <TextBlock Margin="8,4,8,24"
+                       FontSize="24"
+                       FontWeight="SemiBold"
+                       Text="{DynamicResource App.Title}" />
+
+            <Button Content="{DynamicResource Navigation.Download}"
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="{x:Static shell:ShellPage.Download}"
+                    Style="{StaticResource NavigationButtonStyle}" />
+            <Button Content="{DynamicResource Navigation.History}"
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="{x:Static shell:ShellPage.History}"
+                    Style="{StaticResource NavigationButtonStyle}" />
+                <Button Content="{DynamicResource Navigation.Settings}"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="{x:Static shell:ShellPage.Settings}"
+                        Style="{StaticResource NavigationButtonStyle}" />
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Column="1"
+                Margin="24"
+                Padding="32"
+                Background="{DynamicResource Content.BackgroundBrush}"
+                CornerRadius="12">
+            <ContentControl HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontSize="28"
+                            FontWeight="SemiBold">
+                <ContentControl.Style>
+                    <Style TargetType="ContentControl">
+                        <Setter Property="Content" Value="{DynamicResource Page.Download}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding CurrentPage}"
+                                         Value="{x:Static shell:ShellPage.History}">
+                                <Setter Property="Content" Value="{DynamicResource Page.History}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding CurrentPage}"
+                                         Value="{x:Static shell:ShellPage.Settings}">
+                                <Setter Property="Content" Value="{DynamicResource Page.Settings}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ContentControl.Style>
+            </ContentControl>
+        </Border>
+    </Grid>
+</Window>

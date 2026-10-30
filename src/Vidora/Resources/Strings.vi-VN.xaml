@@ -1,0 +1,11 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:system="clr-namespace:System;assembly=System.Runtime">
+    <system:String x:Key="App.Title">Vidora</system:String>
+    <system:String x:Key="Navigation.Download">_Tải xuống</system:String>
+    <system:String x:Key="Navigation.History">_Lịch sử</system:String>
+    <system:String x:Key="Navigation.Settings">_Cài đặt</system:String>
+    <system:String x:Key="Page.Download">Tải xuống</system:String>
+    <system:String x:Key="Page.History">Lịch sử</system:String>
+    <system:String x:Key="Page.Settings">Cài đặt</system:String>
+</ResourceDictionary>
