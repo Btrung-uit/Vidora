@@ -3,6 +3,8 @@
     <SolidColorBrush x:Key="App.BackgroundBrush" Color="#FFF3F4F6" />
     <SolidColorBrush x:Key="Navigation.BackgroundBrush" Color="#FFFFFFFF" />
     <SolidColorBrush x:Key="Content.BackgroundBrush" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="Text.SecondaryBrush" Color="#FF4B5563" />
+    <SolidColorBrush x:Key="Border.Brush" Color="#FFD1D5DB" />
 
     <Style x:Key="NavigationButtonStyle" TargetType="Button">
         <Setter Property="Margin" Value="0,0,0,8" />
