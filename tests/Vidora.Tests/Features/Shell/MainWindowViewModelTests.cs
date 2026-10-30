@@ -71,7 +71,7 @@ public sealed class MainWindowViewModelTests
         var settingsViewModel = new SettingsViewModel(new StubDependencyService());
         var window = new MainWindow(
             shellViewModel,
-            new DownloadViewModel(new StubDiscoveryService()),
+            new DownloadViewModel(new StubDiscoveryService(), new StubDownloadService()),
             settingsViewModel);
 
         try
@@ -100,5 +100,13 @@ public sealed class MainWindowViewModelTests
     {
         public Task<VideoMetadata> DiscoverAsync(string url, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class StubDownloadService : IDownloadService
+    {
+        public Task<DownloadResult> DownloadAsync(
+            DownloadRequest request,
+            IProgress<DownloadProgress> progress,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

@@ -23,7 +23,8 @@ public partial class App : Application
             processRunner,
             dependencyService,
             toolPaths);
-        var downloadViewModel = new DownloadViewModel(discoveryService);
+        IDownloadService downloadService = new DownloadService(processRunner, toolPaths);
+        var downloadViewModel = new DownloadViewModel(discoveryService, downloadService);
         var settingsViewModel = new SettingsViewModel(dependencyService);
 
         MainWindow = new MainWindow(new MainWindowViewModel(), downloadViewModel, settingsViewModel);
