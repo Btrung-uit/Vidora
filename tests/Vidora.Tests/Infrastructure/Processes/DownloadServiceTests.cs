@@ -144,6 +144,7 @@ public sealed class DownloadServiceTests
         CollectionAssert.Contains(captured.Arguments.ToArray(), "--ignore-config");
         CollectionAssert.Contains(captured.Arguments.ToArray(), "--no-playlist");
         CollectionAssert.Contains(captured.Arguments.ToArray(), "--newline");
+        CollectionAssert.Contains(captured.Arguments.ToArray(), "--progress");
         CollectionAssert.Contains(captured.Arguments.ToArray(), "--no-overwrites");
         Assert.AreEqual(request.SourceUrl.OriginalString, captured.Arguments[^1]);
         Assert.AreEqual("--", captured.Arguments[^2]);
@@ -160,6 +161,35 @@ public sealed class DownloadServiceTests
         StringAssert.StartsWith(captured.Arguments[progressIndex + 1], "download:VIDORA_PROGRESS:");
         var printIndex = captured.Arguments.ToList().IndexOf("--print");
         Assert.AreEqual("after_move:VIDORA_RESULT:%(filepath)s", captured.Arguments[printIndex + 1]);
+    }
+
+    [TestMethod]
+    public async Task DownloadAsync_LiteralPercentsInDestinationAndTitle_AreEscapedForOutputTemplate()
+    {
+        using var directory = new TemporaryDirectory();
+        var destination = Directory.CreateDirectory(Path.Combine(directory.Path, "%(id)s")).FullName;
+        var finalPath = Path.Combine(destination, "video.mp4");
+        ProcessSpec? captured = null;
+        var runner = new FakeProcessRunner((spec, output, _) =>
+        {
+            captured = spec;
+            File.WriteAllBytes(finalPath, [1]);
+            output?.Report(Line($"VIDORA_RESULT:{finalPath}"));
+            return Task.FromResult(Result(0));
+        });
+        var request = Request(destination) with
+        {
+            Metadata = Request(destination).Metadata with { Title = "100% %(title)s" }
+        };
+
+        await CreateService(runner).DownloadAsync(request, new CapturedProgress(), CancellationToken.None);
+
+        Assert.IsNotNull(captured);
+        var outputIndex = captured.Arguments.ToList().IndexOf("--output");
+        var outputTemplate = captured.Arguments[outputIndex + 1];
+        Assert.AreEqual(
+            Path.Combine(destination, "100% %(title)s [YouTube-abc123]").Replace("%", "%%", StringComparison.Ordinal) + ".%(ext)s",
+            outputTemplate);
     }
 
     private static DownloadService CreateService(IProcessRunner runner) => new(

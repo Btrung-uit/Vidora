@@ -23,7 +23,8 @@ public sealed class DownloadService(
             request.Metadata.Title,
             request.Metadata.Platform,
             request.Metadata.MediaId);
-        var outputTemplate = Path.Combine(destination, $"{baseName}.%(ext)s");
+        var outputTemplate = Path.Combine(destination, baseName)
+            .Replace("%", "%%", StringComparison.Ordinal) + ".%(ext)s";
         var formatSelector = FormatSelector.Select(request.Metadata.Formats, request.Quality);
         string? finalPath = null;
         var output = new InlineProgress<ProcessOutputLine>(line =>

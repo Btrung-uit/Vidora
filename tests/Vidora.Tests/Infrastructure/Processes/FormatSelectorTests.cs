@@ -47,6 +47,35 @@ public sealed class FormatSelectorTests
     }
 
     [TestMethod]
+    public void Select_PreferredVideoWithoutAudio_UsesPlayableMuxedFallback()
+    {
+        VideoFormat[] formats =
+        [
+            new("mp4-video", "mp4", 1920, 1080, "avc1", "none", 10_000_000),
+            new("muxed-720", "mp4", 1280, 720, "avc1", "mp4a", 8_000_000)
+        ];
+
+        var selector = FormatSelector.Select(formats, QualityPreset.P1080);
+
+        Assert.AreEqual("muxed-720", selector);
+    }
+
+    [TestMethod]
+    public void Select_PreferredVideoWithoutPreferredAudio_UsesBestPlayableFallback()
+    {
+        VideoFormat[] formats =
+        [
+            new("mp4-480", "mp4", 854, 480, "avc1", "none", 5_000_000),
+            new("webm-1080", "webm", 1920, 1080, "vp9", "none", 10_000_000),
+            new("opus", "webm", null, null, "none", "opus", 2_000_000)
+        ];
+
+        var selector = FormatSelector.Select(formats, QualityPreset.P1080);
+
+        Assert.AreEqual("webm-1080+opus", selector);
+    }
+
+    [TestMethod]
     public void Select_OnlyFormatsAboveLimit_ThrowsStableUnavailableError()
     {
         VideoFormat[] formats =

@@ -20,36 +20,24 @@ public static class FormatSelector
                              format.Height is { } height &&
                              height <= maximumHeight)
             .ToArray();
-        var preferredVideos = videos.Where(IsPreferredVideo).ToArray();
-        var video = Best(preferredVideos.Length > 0 ? preferredVideos : videos);
-        if (video is null)
-        {
-            throw Unavailable();
-        }
-
-        if (HasCodec(video.AudioCodec))
-        {
-            return video.FormatId;
-        }
-
         var audios = formats
             .Where(format => !HasCodec(format.VideoCodec) && HasCodec(format.AudioCodec))
             .ToArray();
-        var preferredAudios = audios.Where(IsPreferredAudio).ToArray();
-        var audio = (preferredAudios.Length > 0 ? preferredAudios : audios)
-            .OrderByDescending(format => format.FileSize ?? 0)
+        var candidates = videos
+            .SelectMany(video => HasCodec(video.AudioCodec)
+                ? [new Candidate(video.FormatId, video, IsPreferredVideo(video) && HasPreferredAudioCodec(video))]
+                : audios.Select(audio => new Candidate(
+                    $"{video.FormatId}+{audio.FormatId}",
+                    video,
+                    IsPreferredVideo(video) && IsPreferredAudio(audio))))
+            .OrderByDescending(candidate => candidate.IsPreferred)
+            .ThenByDescending(candidate => candidate.Video.Height ?? 0)
+            .ThenByDescending(candidate => candidate.Video.Width ?? 0)
+            .ThenByDescending(candidate => candidate.Video.FileSize ?? 0)
             .FirstOrDefault();
 
-        return audio is null
-            ? throw Unavailable()
-            : $"{video.FormatId}+{audio.FormatId}";
+        return candidates?.Selector ?? throw Unavailable();
     }
-
-    private static VideoFormat? Best(IEnumerable<VideoFormat> formats) => formats
-        .OrderByDescending(format => format.Height ?? 0)
-        .ThenByDescending(format => format.Width ?? 0)
-        .ThenByDescending(format => format.FileSize ?? 0)
-        .FirstOrDefault();
 
     private static bool IsPreferredVideo(VideoFormat format) =>
         format.Extension.Equals("mp4", StringComparison.OrdinalIgnoreCase) &&
@@ -58,8 +46,11 @@ public static class FormatSelector
 
     private static bool IsPreferredAudio(VideoFormat format) =>
         format.Extension.Equals("m4a", StringComparison.OrdinalIgnoreCase) &&
-        (format.AudioCodec?.StartsWith("mp4a", StringComparison.OrdinalIgnoreCase) == true ||
-         format.AudioCodec?.StartsWith("aac", StringComparison.OrdinalIgnoreCase) == true);
+        HasPreferredAudioCodec(format);
+
+    private static bool HasPreferredAudioCodec(VideoFormat format) =>
+        format.AudioCodec?.StartsWith("mp4a", StringComparison.OrdinalIgnoreCase) == true ||
+        format.AudioCodec?.StartsWith("aac", StringComparison.OrdinalIgnoreCase) == true;
 
     private static bool HasCodec(string? codec) =>
         !string.IsNullOrWhiteSpace(codec) && !codec.Equals("none", StringComparison.OrdinalIgnoreCase);
@@ -70,4 +61,6 @@ public static class FormatSelector
         "Action.ChooseAnotherQuality",
         "No compatible format is available for the selected quality.",
         false));
+
+    private sealed record Candidate(string Selector, VideoFormat Video, bool IsPreferred);
 }

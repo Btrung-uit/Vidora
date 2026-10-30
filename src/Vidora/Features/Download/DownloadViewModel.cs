@@ -43,6 +43,7 @@ public partial class DownloadViewModel(
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartDownloadCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DiscoverCommand))]
     public partial bool IsDownloading { get; private set; }
 
     [ObservableProperty]
@@ -68,9 +69,16 @@ public partial class DownloadViewModel(
         }
     }
 
-    [RelayCommand(AllowConcurrentExecutions = true)]
+    private bool CanDiscover() => !IsDownloading;
+
+    [RelayCommand(CanExecute = nameof(CanDiscover), AllowConcurrentExecutions = true)]
     private async Task DiscoverAsync(CancellationToken cancellationToken)
     {
+        if (!CanDiscover())
+        {
+            return;
+        }
+
         var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var previous = Interlocked.Exchange(ref activeDiscovery, operation);
         previous?.Cancel();

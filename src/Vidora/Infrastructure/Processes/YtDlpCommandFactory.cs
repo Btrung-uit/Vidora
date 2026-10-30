@@ -20,6 +20,7 @@ public static class YtDlpCommandFactory
             "--ignore-config",
             "--no-playlist",
             "--newline",
+            "--progress",
             "--no-overwrites",
             "--windows-filenames",
             "--ffmpeg-location", ffmpegPath,

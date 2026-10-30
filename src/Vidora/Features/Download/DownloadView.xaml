@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:download="clr-namespace:Vidora.Features.Download"
+             xmlns:models="clr-namespace:Vidora.Core.Models"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              d:DesignHeight="520"
              d:DesignWidth="700"
@@ -147,6 +148,68 @@
                                     HorizontalAlignment="Left"
                                     Command="{Binding CancelDownloadCommand}"
                                     Content="{DynamicResource Download.Cancel}" />
+                        </StackPanel>
+                        <StackPanel x:Name="DownloadResultPanel" Margin="0,14,0,0">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding LastDownloadStatus}" Value="{x:Static models:DownloadStatus.Completed}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding LastDownloadStatus}" Value="{x:Static models:DownloadStatus.Cancelled}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding LastDownloadStatus}" Value="{x:Static models:DownloadStatus.Failed}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock x:Name="DownloadStatusText" TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="{DynamicResource Download.Status.Failed}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding LastDownloadStatus}" Value="{x:Static models:DownloadStatus.Completed}">
+                                                <Setter Property="Text" Value="{DynamicResource Download.Status.Completed}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding LastDownloadStatus}" Value="{x:Static models:DownloadStatus.Cancelled}">
+                                                <Setter Property="Text" Value="{DynamicResource Download.Status.Cancelled}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding DownloadError.UserMessageKey}" Value="Error.QualityUnavailable">
+                                                <Setter Property="Text" Value="{DynamicResource Error.QualityUnavailable}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding DownloadError.UserMessageKey}" Value="Error.DestinationUnavailable">
+                                                <Setter Property="Text" Value="{DynamicResource Error.DestinationUnavailable}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding DownloadError.UserMessageKey}" Value="Error.DependencyInvalid">
+                                                <Setter Property="Text" Value="{DynamicResource Error.DependencyInvalid}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding DownloadError.UserMessageKey}" Value="Error.FinalOutputMissing">
+                                                <Setter Property="Text" Value="{DynamicResource Error.FinalOutputMissing}" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding DownloadError.UserMessageKey}" Value="Error.OutputOutsideDestination">
+                                                <Setter Property="Text" Value="{DynamicResource Error.OutputOutsideDestination}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Margin="0,4,0,0"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding DownloadResult.FinalPath}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding LastDownloadStatus}" Value="{x:Static models:DownloadStatus.Completed}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                         </StackPanel>
                     </StackPanel>
                 </Grid>
