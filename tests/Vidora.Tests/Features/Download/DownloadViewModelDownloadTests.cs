@@ -4,6 +4,7 @@ using Vidora.Core.Errors;
 using Vidora.Core.Models;
 using Vidora.Core.Services;
 using Vidora.Features.Download;
+using Vidora.Infrastructure.Processes;
 
 namespace Vidora.Tests.Features.Download;
 
@@ -106,6 +107,40 @@ public sealed class DownloadViewModelDownloadTests
         await download;
     }
 
+    [TestMethod]
+    public async Task StartDownloadCommand_CoordinatorCancellation_ReleasesActiveDownload()
+    {
+        using var directory = new TemporaryDirectory();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var activeDownloads = new ActiveDownloadCoordinator();
+        var viewModel = new DownloadViewModel(
+            new FakeDiscoveryService(),
+            new FakeDownloadService(async (_, _, token) =>
+            {
+                started.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                throw new AssertFailedException("Coordinator cancellation should stop the download.");
+            }),
+            activeDownloads)
+        {
+            Url = "https://youtu.be/abc123",
+            DestinationDirectory = directory.Path
+        };
+        await viewModel.DiscoverCommand.ExecuteAsync(null);
+        var download = viewModel.StartDownloadCommand.ExecuteAsync(null);
+        await started.Task;
+
+        var stopped = await activeDownloads.CancelAndWaitAsync(
+            activeDownloads.ActiveTaskId!.Value,
+            TimeSpan.FromSeconds(1),
+            CancellationToken.None);
+        await download;
+
+        Assert.IsTrue(stopped);
+        Assert.IsFalse(activeDownloads.HasActiveDownload);
+        Assert.AreEqual(DownloadStatus.Cancelled, viewModel.LastDownloadStatus);
+    }
+
     [STATestMethod]
     [DoNotParallelize]
     public void DownloadView_TerminalStates_ShowLocalizedResults()
@@ -164,7 +199,8 @@ public sealed class DownloadViewModelDownloadTests
     {
         var viewModel = new DownloadViewModel(
             discoveryService ?? new FakeDiscoveryService(),
-            downloadService)
+            downloadService,
+            new ActiveDownloadCoordinator())
         {
             Url = "https://youtu.be/abc123",
             DestinationDirectory = destination,

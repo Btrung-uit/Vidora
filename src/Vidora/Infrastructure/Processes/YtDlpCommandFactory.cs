@@ -14,6 +14,8 @@ public static class YtDlpCommandFactory
         string ffmpegPath,
         string formatSelector,
         string outputTemplate,
+        string destinationDirectory,
+        string taskDirectory,
         string url) => new(
         ytDlpPath,
         [
@@ -26,6 +28,8 @@ public static class YtDlpCommandFactory
             "--ffmpeg-location", ffmpegPath,
             "--format", formatSelector,
             "--output", outputTemplate,
+            "--paths", $"home:{destinationDirectory}",
+            "--paths", $"temp:{taskDirectory}",
             "--progress-template", ProgressTemplate,
             "--print", "after_move:VIDORA_RESULT:%(filepath)s",
             "--", url

@@ -10,7 +10,8 @@ namespace Vidora.Infrastructure.Processes;
 
 public sealed class DownloadService(
     IProcessRunner processRunner,
-    AppToolPaths toolPaths) : IDownloadService
+    AppToolPaths toolPaths,
+    TaskWorkspaceService taskWorkspaceService) : IDownloadService
 {
     public async Task<DownloadResult> DownloadAsync(
         DownloadRequest request,
@@ -23,80 +24,104 @@ public sealed class DownloadService(
             request.Metadata.Title,
             request.Metadata.Platform,
             request.Metadata.MediaId);
-        var outputTemplate = Path.Combine(destination, baseName)
-            .Replace("%", "%%", StringComparison.Ordinal) + ".%(ext)s";
+        var outputTemplate = baseName.Replace("%", "%%", StringComparison.Ordinal) + ".%(ext)s";
         var formatSelector = FormatSelector.Select(request.Metadata.Formats, request.Quality);
-        string? finalPath = null;
-        var output = new InlineProgress<ProcessOutputLine>(line =>
-        {
-            if (YtDlpProgressParser.TryParseProgress(line.Text, out var parsedProgress))
-            {
-                progress.Report(parsedProgress!);
-            }
-
-            if (YtDlpProgressParser.TryParseFinalPath(line.Text, out var parsedPath))
-            {
-                Volatile.Write(ref finalPath, parsedPath);
-            }
-        });
-
-        ProcessResult processResult;
+        string taskDirectory;
         try
         {
-            processResult = await processRunner.RunAsync(
-                YtDlpCommandFactory.BuildDownloadSpec(
-                    toolPaths.YtDlpPath,
-                    toolPaths.FfmpegPath,
-                    formatSelector,
-                    outputTemplate,
-                    request.SourceUrl.OriginalString),
-                output,
-                cancellationToken);
+            taskDirectory = taskWorkspaceService.Create(request.Id);
         }
         catch (Exception exception) when (
-            exception is Win32Exception or IOException or InvalidOperationException)
-        {
-            throw new VidoraException(new VidoraError(
-                VidoraErrorCode.DependencyInvalid,
-                "Error.DependencyInvalid",
-                "Action.OpenSettings",
-                exception.Message,
-                false));
-        }
-
-        if (processResult.ExitCode != 0)
-        {
-            throw new VidoraException(new VidoraError(
-                VidoraErrorCode.Unknown,
-                "Error.DownloadFailed",
-                "Action.TryAgain",
-                $"yt-dlp exited with code {processResult.ExitCode}.",
-                true));
-        }
-
-        var reportedPath = Volatile.Read(ref finalPath);
-        if (string.IsNullOrWhiteSpace(reportedPath) || !Path.IsPathRooted(reportedPath))
-        {
-            throw MissingFinalPath();
-        }
-
-        var canonicalPath = Path.GetFullPath(reportedPath);
-        if (!IsWithin(destination, canonicalPath))
+            exception is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             throw new VidoraException(new VidoraError(
                 VidoraErrorCode.DiskFailure,
-                "Error.OutputOutsideDestination",
-                "Action.ChooseAnotherFolder",
-                "yt-dlp reported an output path outside the selected destination.",
-                false));
+                "Error.TempWorkspaceUnavailable",
+                "Action.TryAgain",
+                exception.Message,
+                true));
         }
 
-        if (!File.Exists(canonicalPath))
+        try
         {
-            throw MissingFinalPath();
-        }
+            string? finalPath = null;
+            var output = new InlineProgress<ProcessOutputLine>(line =>
+            {
+                if (YtDlpProgressParser.TryParseProgress(line.Text, out var parsedProgress))
+                {
+                    progress.Report(parsedProgress!);
+                }
 
-        return new DownloadResult(DownloadStatus.Completed, canonicalPath, null);
+                if (YtDlpProgressParser.TryParseFinalPath(line.Text, out var parsedPath))
+                {
+                    Volatile.Write(ref finalPath, parsedPath);
+                }
+            });
+
+            ProcessResult processResult;
+            try
+            {
+                processResult = await processRunner.RunAsync(
+                    YtDlpCommandFactory.BuildDownloadSpec(
+                        toolPaths.YtDlpPath,
+                        toolPaths.FfmpegPath,
+                        formatSelector,
+                        outputTemplate,
+                        destination,
+                        taskDirectory,
+                        request.SourceUrl.OriginalString),
+                    output,
+                    cancellationToken);
+            }
+            catch (Exception exception) when (
+                exception is Win32Exception or IOException or InvalidOperationException)
+            {
+                throw new VidoraException(new VidoraError(
+                    VidoraErrorCode.DependencyInvalid,
+                    "Error.DependencyInvalid",
+                    "Action.OpenSettings",
+                    exception.Message,
+                    false));
+            }
+
+            if (processResult.ExitCode != 0)
+            {
+                throw new VidoraException(new VidoraError(
+                    VidoraErrorCode.Unknown,
+                    "Error.DownloadFailed",
+                    "Action.TryAgain",
+                    $"yt-dlp exited with code {processResult.ExitCode}.",
+                    true));
+            }
+
+            var reportedPath = Volatile.Read(ref finalPath);
+            if (string.IsNullOrWhiteSpace(reportedPath) || !Path.IsPathRooted(reportedPath))
+            {
+                throw MissingFinalPath();
+            }
+
+            var canonicalPath = Path.GetFullPath(reportedPath);
+            if (!IsWithin(destination, canonicalPath))
+            {
+                throw new VidoraException(new VidoraError(
+                    VidoraErrorCode.DiskFailure,
+                    "Error.OutputOutsideDestination",
+                    "Action.ChooseAnotherFolder",
+                    "yt-dlp reported an output path outside the selected destination.",
+                    false));
+            }
+
+            if (!File.Exists(canonicalPath))
+            {
+                throw MissingFinalPath();
+            }
+
+            return new DownloadResult(DownloadStatus.Completed, canonicalPath, null);
+        }
+        finally
+        {
+            taskWorkspaceService.Cleanup(request.Id);
+        }
     }
 
     private static bool IsWithin(string directory, string path)
