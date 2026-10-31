@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Vidora.Core.Errors;
 using Vidora.Core.Models;
 using Vidora.Infrastructure.Dependencies;
+using Vidora.Infrastructure.Files;
 using Vidora.Infrastructure.Processes;
 
 namespace Vidora.Tests.Infrastructure.Processes;
@@ -23,7 +24,7 @@ public sealed class DownloadServiceTests
         });
         var progress = new CapturedProgress();
 
-        await CreateService(runner).DownloadAsync(Request(directory.Path), progress, CancellationToken.None);
+        await CreateService(runner, directory.Path).DownloadAsync(Request(directory.Path), progress, CancellationToken.None);
 
         Assert.HasCount(1, progress.Values);
         Assert.AreEqual(25.5, progress.Values[0].Percent);
@@ -34,7 +35,7 @@ public sealed class DownloadServiceTests
     public async Task DownloadAsync_NonZeroExit_ThrowsStableDownloadError()
     {
         using var directory = new TemporaryDirectory();
-        var service = CreateService(new FakeProcessRunner((_, _, _) => Task.FromResult(Result(1))));
+        var service = CreateService(new FakeProcessRunner((_, _, _) => Task.FromResult(Result(1))), directory.Path);
 
         var exception = await Assert.ThrowsAsync<VidoraException>(
             () => service.DownloadAsync(Request(directory.Path), new CapturedProgress(), CancellationToken.None));
@@ -51,7 +52,7 @@ public sealed class DownloadServiceTests
             Task.FromException<ProcessResult>(new Win32Exception("Executable unavailable.")));
 
         var exception = await Assert.ThrowsAsync<VidoraException>(
-            () => CreateService(runner).DownloadAsync(Request(directory.Path), new CapturedProgress(), CancellationToken.None));
+            () => CreateService(runner, directory.Path).DownloadAsync(Request(directory.Path), new CapturedProgress(), CancellationToken.None));
 
         Assert.AreEqual(VidoraErrorCode.DependencyInvalid, exception.Error.Code);
     }
@@ -68,7 +69,7 @@ public sealed class DownloadServiceTests
         });
 
         var exception = await Assert.ThrowsAsync<VidoraException>(
-            () => CreateService(runner).DownloadAsync(Request(directory.Path), new CapturedProgress(), CancellationToken.None));
+            () => CreateService(runner, directory.Path).DownloadAsync(Request(directory.Path), new CapturedProgress(), CancellationToken.None));
 
         Assert.AreEqual(VidoraErrorCode.PostProcessingFailure, exception.Error.Code);
     }
@@ -87,7 +88,7 @@ public sealed class DownloadServiceTests
             });
 
             var exception = await Assert.ThrowsAsync<VidoraException>(
-                () => CreateService(runner).DownloadAsync(Request(directory.Path), new CapturedProgress(), CancellationToken.None));
+                () => CreateService(runner, directory.Path).DownloadAsync(Request(directory.Path), new CapturedProgress(), CancellationToken.None));
 
             Assert.AreEqual(VidoraErrorCode.DiskFailure, exception.Error.Code);
         }
@@ -109,7 +110,7 @@ public sealed class DownloadServiceTests
             return Task.FromResult(Result(0));
         });
 
-        var result = await CreateService(runner).DownloadAsync(
+        var result = await CreateService(runner, directory.Path).DownloadAsync(
             Request(directory.Path),
             new CapturedProgress(),
             CancellationToken.None);
@@ -137,7 +138,7 @@ public sealed class DownloadServiceTests
             SourceUrl = new Uri("https://youtube.com/watch?v=abc123&list=quoted%22value")
         };
 
-        await CreateService(runner).DownloadAsync(request, new CapturedProgress(), CancellationToken.None);
+        await CreateService(runner, directory.Path).DownloadAsync(request, new CapturedProgress(), CancellationToken.None);
 
         Assert.IsNotNull(captured);
         Assert.AreEqual(@"C:\tools\yt-dlp.exe", captured.FileName);
@@ -161,6 +162,11 @@ public sealed class DownloadServiceTests
         StringAssert.StartsWith(captured.Arguments[progressIndex + 1], "download:VIDORA_PROGRESS:");
         var printIndex = captured.Arguments.ToList().IndexOf("--print");
         Assert.AreEqual("after_move:VIDORA_RESULT:%(filepath)s", captured.Arguments[printIndex + 1]);
+        var pathsIndex = captured.Arguments.ToList().IndexOf("--paths");
+        Assert.AreEqual(
+            $"temp:{Path.Combine(directory.Path, "temp", request.Id.ToString("D"))}",
+            captured.Arguments[pathsIndex + 1]);
+        Assert.IsFalse(Directory.Exists(Path.Combine(directory.Path, "temp", request.Id.ToString("D"))));
     }
 
     [TestMethod]
@@ -182,7 +188,7 @@ public sealed class DownloadServiceTests
             Metadata = Request(destination).Metadata with { Title = "100% %(title)s" }
         };
 
-        await CreateService(runner).DownloadAsync(request, new CapturedProgress(), CancellationToken.None);
+        await CreateService(runner, directory.Path).DownloadAsync(request, new CapturedProgress(), CancellationToken.None);
 
         Assert.IsNotNull(captured);
         var outputIndex = captured.Arguments.ToList().IndexOf("--output");
@@ -192,9 +198,37 @@ public sealed class DownloadServiceTests
             outputTemplate);
     }
 
-    private static DownloadService CreateService(IProcessRunner runner) => new(
+    [TestMethod]
+    public async Task DownloadAsync_CancelledProcess_CleansOnlyTaskWorkspace()
+    {
+        using var directory = new TemporaryDirectory();
+        var request = Request(directory.Path);
+        var keepFile = Path.Combine(directory.Path, "keep.part");
+        File.WriteAllText(keepFile, "user file");
+        var runner = new FakeProcessRunner(async (_, _, token) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            throw new AssertFailedException("Cancellation should stop the process.");
+        });
+        using var cancellation = new CancellationTokenSource();
+        var download = CreateService(runner, directory.Path).DownloadAsync(
+            request,
+            new CapturedProgress(),
+            cancellation.Token);
+
+        cancellation.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => download);
+        Assert.IsFalse(Directory.Exists(Path.Combine(directory.Path, "temp", request.Id.ToString("D"))));
+        Assert.IsTrue(File.Exists(keepFile));
+    }
+
+    private static DownloadService CreateService(IProcessRunner runner, string testRoot) => new(
         runner,
-        new AppToolPaths(@"C:\tools\yt-dlp.exe", @"C:\tools\ffmpeg\ffmpeg.exe"));
+        new AppToolPaths(@"C:\tools\yt-dlp.exe", @"C:\tools\ffmpeg\ffmpeg.exe"),
+        new TaskWorkspaceService(
+            Path.Combine(testRoot, "temp"),
+            new WindowsCanonicalPathResolver()));
 
     private static DownloadRequest Request(string destination) => new(
         Guid.Parse("11111111-1111-1111-1111-111111111111"),

@@ -1,9 +1,11 @@
 using System.Windows;
+using System.Windows.Threading;
 using Vidora.Core.Models;
 using Vidora.Core.Services;
 using Vidora.Features.Download;
 using Vidora.Features.Settings;
 using Vidora.Features.Shell;
+using Vidora.Infrastructure.Processes;
 
 namespace Vidora.Tests.Features.Shell;
 
@@ -59,7 +61,7 @@ public sealed class MainWindowViewModelTests
 
     [STATestMethod]
     [DoNotParallelize]
-    public void NavigateCommand_Settings_ShowsSettingsView()
+    public void MainWindow_WiresSettingsNavigationAndShutdownOutcomes()
     {
         if (Application.Current is null)
         {
@@ -69,10 +71,12 @@ public sealed class MainWindowViewModelTests
 
         var shellViewModel = new MainWindowViewModel();
         var settingsViewModel = new SettingsViewModel(new StubDependencyService());
+        var shutdown = new StubShutdownCoordinator(AppShutdownOutcome.ContinueRunning);
         var window = new MainWindow(
             shellViewModel,
-            new DownloadViewModel(new StubDiscoveryService(), new StubDownloadService()),
-            settingsViewModel);
+            new DownloadViewModel(new StubDiscoveryService(), new StubDownloadService(), new ActiveDownloadCoordinator()),
+            settingsViewModel,
+            shutdown);
 
         try
         {
@@ -83,10 +87,27 @@ public sealed class MainWindowViewModelTests
             var settingsView = LogicalTreeHelper.FindLogicalNode(window, "SettingsContent") as SettingsView;
             Assert.IsNotNull(settingsView);
             Assert.AreEqual(Visibility.Visible, settingsView.Visibility);
+
+            window.Close();
+
+            Assert.IsTrue(window.IsVisible);
+            Assert.AreEqual(1, shutdown.Calls);
+            shutdown.Outcome = AppShutdownOutcome.ExitCompleted;
+
+            window.Close();
+            window.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+
+            Assert.IsFalse(window.IsVisible);
+            Assert.AreEqual(2, shutdown.Calls);
         }
         finally
         {
-            window.Close();
+            if (window.IsVisible)
+            {
+                shutdown.Outcome = AppShutdownOutcome.ExitCompleted;
+                window.Close();
+                window.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            }
         }
     }
 
@@ -108,5 +129,18 @@ public sealed class MainWindowViewModelTests
             DownloadRequest request,
             IProgress<DownloadProgress> progress,
             CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class StubShutdownCoordinator(AppShutdownOutcome outcome) : IAppShutdownCoordinator
+    {
+        public AppShutdownOutcome Outcome { get; set; } = outcome;
+
+        public int Calls { get; private set; }
+
+        public Task<AppShutdownOutcome> RequestShutdownAsync(CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(Outcome);
+        }
     }
 }

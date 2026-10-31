@@ -2,6 +2,7 @@ using Vidora.Core.Errors;
 using Vidora.Core.Models;
 using Vidora.Core.Services;
 using Vidora.Features.Download;
+using Vidora.Infrastructure.Processes;
 
 namespace Vidora.Tests.Features.Download;
 
@@ -12,7 +13,7 @@ public sealed class DownloadViewModelDiscoveryTests
     public async Task DiscoverCommand_Success_TransitionsEmptyToDiscoveringToReady()
     {
         var completion = new TaskCompletionSource<VideoMetadata>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var viewModel = new DownloadViewModel(new FakeDiscoveryService((_, _) => completion.Task), new StubDownloadService())
+        var viewModel = new DownloadViewModel(new FakeDiscoveryService((_, _) => completion.Task), new StubDownloadService(), new ActiveDownloadCoordinator())
         {
             Url = "https://youtu.be/abc123"
         };
@@ -39,7 +40,7 @@ public sealed class DownloadViewModelDiscoveryTests
             started.SetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
             throw new AssertFailedException("Cancellation should stop the pending discovery.");
-        }), new StubDownloadService())
+        }), new StubDownloadService(), new ActiveDownloadCoordinator())
         {
             Url = "https://youtu.be/abc123"
         };
@@ -64,7 +65,7 @@ public sealed class DownloadViewModelDiscoveryTests
             "Fixture unavailable.",
             false);
         var viewModel = new DownloadViewModel(new FakeDiscoveryService(
-            (_, _) => Task.FromException<VideoMetadata>(new VidoraException(expectedError))), new StubDownloadService())
+            (_, _) => Task.FromException<VideoMetadata>(new VidoraException(expectedError))), new StubDownloadService(), new ActiveDownloadCoordinator())
         {
             Url = "https://youtu.be/missing"
         };
@@ -93,7 +94,7 @@ public sealed class DownloadViewModelDiscoveryTests
             }
 
             return Metadata(url.EndsWith("second", StringComparison.Ordinal) ? "second" : "unexpected");
-        }), new StubDownloadService())
+        }), new StubDownloadService(), new ActiveDownloadCoordinator())
         {
             Url = "https://youtu.be/first"
         };

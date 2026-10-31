@@ -27,6 +27,8 @@
     <system:String x:Key="Download.Status.Completed">Đã tải xong video:</system:String>
     <system:String x:Key="Download.Status.Cancelled">Đã hủy tải video.</system:String>
     <system:String x:Key="Download.Status.Failed">Không thể tải video. Vui lòng thử lại.</system:String>
+    <system:String x:Key="Shutdown.Title">Đang tải video</system:String>
+    <system:String x:Key="Shutdown.Message">Chọn Có để hủy tải và thoát. Chọn Không để tiếp tục tải.</system:String>
     <system:String x:Key="Error.QualityUnavailable">Không có định dạng phù hợp với chất lượng đã chọn.</system:String>
     <system:String x:Key="Error.DestinationUnavailable">Không thể ghi vào thư mục đã chọn.</system:String>
     <system:String x:Key="Error.DownloadFailed">Không thể tải video.</system:String>

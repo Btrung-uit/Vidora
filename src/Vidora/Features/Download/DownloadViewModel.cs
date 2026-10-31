@@ -17,7 +17,8 @@ public enum DownloadDiscoveryState
 
 public partial class DownloadViewModel(
     IVideoDiscoveryService discoveryService,
-    IDownloadService downloadService) : ObservableObject
+    IDownloadService downloadService,
+    IActiveDownloadCoordinator activeDownloads) : ObservableObject
 {
     private CancellationTokenSource? activeDiscovery;
 
@@ -139,23 +140,25 @@ public partial class DownloadViewModel(
         DownloadResult = null;
         DownloadError = null;
         LastDownloadStatus = DownloadStatus.Downloading;
+        var taskId = Guid.NewGuid();
+        var activeCancellationToken = activeDownloads.Begin(taskId, cancellationToken);
 
         try
         {
             var progress = new Progress<DownloadProgress>(value => Progress = value);
             DownloadResult = await downloadService.DownloadAsync(
                 new DownloadRequest(
-                    Guid.NewGuid(),
+                    taskId,
                     Metadata.SourceUrl,
                     Metadata,
                     SelectedQuality,
                     DestinationDirectory,
                     DateTimeOffset.UtcNow),
                 progress,
-                cancellationToken);
+                activeCancellationToken);
             LastDownloadStatus = DownloadResult.Status;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (activeCancellationToken.IsCancellationRequested)
         {
             LastDownloadStatus = DownloadStatus.Cancelled;
         }
@@ -166,6 +169,7 @@ public partial class DownloadViewModel(
         }
         finally
         {
+            activeDownloads.Complete(taskId);
             IsDownloading = false;
         }
     }
