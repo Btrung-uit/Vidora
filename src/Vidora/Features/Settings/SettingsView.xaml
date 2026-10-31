@@ -27,6 +27,24 @@
         <TextBlock Margin="0,0,0,24"
                    Text="{DynamicResource Dependency.Description}"
                    TextWrapping="Wrap" />
+        <TextBlock x:Name="PersistenceRecoveryWarning"
+                   Margin="0,0,0,16"
+                   Padding="12"
+                   Background="#FFFFF4CE"
+                   Foreground="#FF7A4E00"
+                   Text="{DynamicResource Settings.PersistenceRecoveryWarning}"
+                   TextWrapping="Wrap">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasPersistenceRecoveryWarning}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
 
         <Border Margin="0,0,0,12" Padding="16" BorderBrush="#FFD1D5DB" BorderThickness="1" CornerRadius="8">
             <StackPanel DataContext="{Binding Report.YtDlp}">

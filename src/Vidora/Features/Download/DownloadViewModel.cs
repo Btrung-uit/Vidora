@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -15,12 +16,30 @@ public enum DownloadDiscoveryState
     Failed
 }
 
-public partial class DownloadViewModel(
-    IVideoDiscoveryService discoveryService,
-    IDownloadService downloadService,
-    IActiveDownloadCoordinator activeDownloads) : ObservableObject
+public partial class DownloadViewModel : ObservableObject
 {
+    private readonly IVideoDiscoveryService discoveryService;
+    private readonly IDownloadQueueService queueService;
+    private readonly ISettingsService settingsService;
+    private readonly TimeProvider timeProvider;
+    private readonly SynchronizationContext? uiContext;
     private CancellationTokenSource? activeDiscovery;
+
+    public DownloadViewModel(
+        IVideoDiscoveryService discoveryService,
+        IDownloadQueueService queueService,
+        ISettingsService settingsService,
+        TimeProvider timeProvider,
+        SynchronizationContext? uiContext = null)
+    {
+        this.discoveryService = discoveryService;
+        this.queueService = queueService;
+        this.settingsService = settingsService;
+        this.timeProvider = timeProvider;
+        this.uiContext = uiContext ?? SynchronizationContext.Current;
+        queueService.Changed += QueueService_Changed;
+        RefreshQueueProjection();
+    }
 
     [ObservableProperty]
     public partial string Url { get; set; } = string.Empty;
@@ -59,7 +78,19 @@ public partial class DownloadViewModel(
     [ObservableProperty]
     public partial DownloadStatus? LastDownloadStatus { get; private set; }
 
+    [ObservableProperty]
+    public partial IReadOnlyList<DownloadQueueItem> QueueItems { get; private set; } = [];
+
     public IReadOnlyList<QualityPreset> QualityPresets { get; } = Enum.GetValues<QualityPreset>();
+
+    public async Task InitializeAsync(CancellationToken cancellationToken)
+    {
+        var settings = await settingsService.LoadAsync(cancellationToken);
+        if (settings.LastDestinationDirectory is { } destination && Directory.Exists(destination))
+        {
+            DestinationDirectory = destination;
+        }
+    }
 
     [RelayCommand]
     private void Paste()
@@ -70,7 +101,7 @@ public partial class DownloadViewModel(
         }
     }
 
-    private bool CanDiscover() => !IsDownloading;
+    private static bool CanDiscover() => true;
 
     [RelayCommand(CanExecute = nameof(CanDiscover), AllowConcurrentExecutions = true)]
     private async Task DiscoverAsync(CancellationToken cancellationToken)
@@ -124,8 +155,7 @@ public partial class DownloadViewModel(
 
     private bool CanStartDownload() =>
         Metadata is not null &&
-        !string.IsNullOrWhiteSpace(DestinationDirectory) &&
-        !IsDownloading;
+        !string.IsNullOrWhiteSpace(DestinationDirectory);
 
     [RelayCommand(CanExecute = nameof(CanStartDownload))]
     private async Task StartDownloadAsync(CancellationToken cancellationToken)
@@ -135,45 +165,57 @@ public partial class DownloadViewModel(
             return;
         }
 
-        IsDownloading = true;
-        Progress = null;
-        DownloadResult = null;
-        DownloadError = null;
-        LastDownloadStatus = DownloadStatus.Downloading;
         var taskId = Guid.NewGuid();
-        var activeCancellationToken = activeDownloads.Begin(taskId, cancellationToken);
-
-        try
+        await queueService.EnqueueAsync(
+            new DownloadRequest(
+                taskId,
+                Metadata.SourceUrl,
+                Metadata,
+                SelectedQuality,
+                DestinationDirectory,
+                timeProvider.GetUtcNow()),
+            cancellationToken);
+        if (Directory.Exists(DestinationDirectory))
         {
-            var progress = new Progress<DownloadProgress>(value => Progress = value);
-            DownloadResult = await downloadService.DownloadAsync(
-                new DownloadRequest(
-                    taskId,
-                    Metadata.SourceUrl,
-                    Metadata,
-                    SelectedQuality,
-                    DestinationDirectory,
-                    DateTimeOffset.UtcNow),
-                progress,
-                activeCancellationToken);
-            LastDownloadStatus = DownloadResult.Status;
-        }
-        catch (OperationCanceledException) when (activeCancellationToken.IsCancellationRequested)
-        {
-            LastDownloadStatus = DownloadStatus.Cancelled;
-        }
-        catch (VidoraException exception)
-        {
-            DownloadError = exception.Error;
-            LastDownloadStatus = DownloadStatus.Failed;
-        }
-        finally
-        {
-            activeDownloads.Complete(taskId);
-            IsDownloading = false;
+            await settingsService.SaveAsync(new AppSettings(DestinationDirectory), cancellationToken);
         }
     }
 
     [RelayCommand]
-    private void CancelDownload() => StartDownloadCommand.Cancel();
+    private Task CancelDownloadAsync(CancellationToken cancellationToken) =>
+        queueService.CancelActiveAsync(cancellationToken);
+
+    [RelayCommand]
+    private Task ResumeQueueAsync(CancellationToken cancellationToken) =>
+        queueService.ResumeAsync(cancellationToken);
+
+    [RelayCommand]
+    private Task RemovePendingAsync(DownloadQueueItem item, CancellationToken cancellationToken) =>
+        queueService.RemovePendingAsync(item.Request.Id, cancellationToken);
+
+    private void QueueService_Changed(object? sender, EventArgs e)
+    {
+        if (uiContext is null || ReferenceEquals(SynchronizationContext.Current, uiContext))
+        {
+            RefreshQueueProjection();
+            return;
+        }
+
+        uiContext.Post(static state => ((DownloadViewModel)state!).RefreshQueueProjection(), this);
+    }
+
+    private void RefreshQueueProjection()
+    {
+        var snapshot = queueService.Items;
+        QueueItems = snapshot;
+        var active = snapshot.FirstOrDefault(item => item.Status == DownloadStatus.Downloading);
+        var latest = active ?? snapshot.LastOrDefault();
+        IsDownloading = active is not null;
+        Progress = active?.Progress;
+        LastDownloadStatus = latest?.Status;
+        DownloadResult = latest is null || latest.Status is DownloadStatus.Pending or DownloadStatus.Downloading
+            ? null
+            : new DownloadResult(latest.Status, latest.FinalPath, latest.Error);
+        DownloadError = latest?.Error;
+    }
 }

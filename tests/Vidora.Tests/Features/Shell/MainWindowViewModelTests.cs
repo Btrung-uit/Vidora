@@ -5,7 +5,6 @@ using Vidora.Core.Services;
 using Vidora.Features.Download;
 using Vidora.Features.Settings;
 using Vidora.Features.Shell;
-using Vidora.Infrastructure.Processes;
 
 namespace Vidora.Tests.Features.Shell;
 
@@ -74,7 +73,11 @@ public sealed class MainWindowViewModelTests
         var shutdown = new StubShutdownCoordinator(AppShutdownOutcome.ContinueRunning);
         var window = new MainWindow(
             shellViewModel,
-            new DownloadViewModel(new StubDiscoveryService(), new StubDownloadService(), new ActiveDownloadCoordinator()),
+            new DownloadViewModel(
+                new StubDiscoveryService(),
+                new StubQueueService(),
+                new StubSettingsService(),
+                TimeProvider.System),
             settingsViewModel,
             shutdown);
 
@@ -123,12 +126,32 @@ public sealed class MainWindowViewModelTests
             throw new NotSupportedException();
     }
 
-    private sealed class StubDownloadService : IDownloadService
+    private sealed class StubQueueService : IDownloadQueueService
     {
-        public Task<DownloadResult> DownloadAsync(
-            DownloadRequest request,
-            IProgress<DownloadProgress> progress,
-            CancellationToken cancellationToken) => throw new NotSupportedException();
+        public IReadOnlyList<DownloadQueueItem> Items => [];
+
+        public event EventHandler? Changed { add { } remove { } }
+
+        public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task EnqueueAsync(DownloadRequest request, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task ResumeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task CancelActiveAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<bool> RemovePendingAsync(Guid taskId, CancellationToken cancellationToken) => Task.FromResult(false);
+
+        public Task PersistInterruptedAsync(Guid taskId, DownloadResult result, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class StubSettingsService : ISettingsService
+    {
+        public Task<AppSettings> LoadAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(new AppSettings(null));
+
+        public Task SaveAsync(AppSettings settings, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class StubShutdownCoordinator(AppShutdownOutcome outcome) : IAppShutdownCoordinator

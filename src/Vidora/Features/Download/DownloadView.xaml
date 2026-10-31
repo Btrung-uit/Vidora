@@ -13,6 +13,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <TextBlock FontSize="28"
@@ -229,5 +230,65 @@
                 <TextBlock Text="{DynamicResource Download.DiscoveryFailed}" />
             </StackPanel>
         </Grid>
+
+        <StackPanel Grid.Row="3" Margin="0,16,0,0">
+            <DockPanel Margin="0,0,0,8">
+                <TextBlock VerticalAlignment="Center"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="{DynamicResource Queue.Title}" />
+                <Button x:Name="ResumeQueueButton"
+                        DockPanel.Dock="Right"
+                        Padding="12,4"
+                        Command="{Binding ResumeQueueCommand}"
+                        Content="{DynamicResource Queue.Resume}" />
+            </DockPanel>
+            <ItemsControl x:Name="QueueList" ItemsSource="{Binding QueueItems}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="0,0,0,6"
+                                Padding="10"
+                                BorderBrush="{DynamicResource Border.Brush}"
+                                BorderThickness="1"
+                                CornerRadius="6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold" Text="{Binding Request.Metadata.Title}" />
+                                    <TextBlock Margin="0,3,0,0" Text="{Binding Status}" />
+                                    <TextBlock Margin="0,3,0,0"
+                                               Foreground="{DynamicResource Text.SecondaryBrush}"
+                                               Text="{Binding Request.DestinationDirectory}" />
+                                    <TextBlock Margin="0,3,0,0"
+                                               Foreground="DarkOrange"
+                                               Text="{DynamicResource Queue.DuplicateWarning}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasDuplicateUrlWarning}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Margin="12,0,0,0"
+                                        Padding="10,4"
+                                        VerticalAlignment="Center"
+                                        Command="{Binding DataContext.RemovePendingCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding}"
+                                        Content="{DynamicResource Queue.Remove}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
     </Grid>
 </UserControl>
