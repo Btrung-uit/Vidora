@@ -22,21 +22,26 @@ public sealed class AppShutdownCoordinator(
             return AppShutdownOutcome.ContinueRunning;
         }
 
-        if (!await activeDownloads.CancelAndWaitAsync(taskId.Value, shutdownTimeout, cancellationToken))
+        while ((taskId = activeDownloads.ActiveTaskId) is not null)
         {
-            return AppShutdownOutcome.ExitCompleted;
-        }
+            if (!await activeDownloads.CancelAndWaitAsync(taskId.Value, shutdownTimeout, cancellationToken))
+            {
+                continue;
+            }
 
-        try
-        {
-            await persistInterrupted(
-                    taskId.Value,
-                    new DownloadResult(DownloadStatus.Interrupted, null, null),
-                    cancellationToken)
-                .WaitAsync(shutdownTimeout, cancellationToken);
-        }
-        catch (TimeoutException)
-        {
+            try
+            {
+                await persistInterrupted(
+                        taskId.Value,
+                        new DownloadResult(DownloadStatus.Interrupted, null, null),
+                        cancellationToken)
+                    .WaitAsync(shutdownTimeout, cancellationToken);
+            }
+            catch (TimeoutException)
+            {
+            }
+
+            break;
         }
 
         return AppShutdownOutcome.ExitCompleted;

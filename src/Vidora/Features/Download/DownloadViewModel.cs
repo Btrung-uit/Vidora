@@ -209,7 +209,9 @@ public partial class DownloadViewModel : ObservableObject
         var snapshot = queueService.Items;
         QueueItems = snapshot;
         var active = snapshot.FirstOrDefault(item => item.Status == DownloadStatus.Downloading);
-        var latest = active ?? snapshot.LastOrDefault();
+        var latestTerminal = snapshot.LastOrDefault(item =>
+            item.Status is not DownloadStatus.Pending and not DownloadStatus.Downloading);
+        var latest = active ?? latestTerminal ?? snapshot.LastOrDefault();
         IsDownloading = active is not null;
         Progress = active?.Progress;
         LastDownloadStatus = latest?.Status;

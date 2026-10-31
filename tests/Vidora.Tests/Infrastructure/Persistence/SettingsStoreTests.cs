@@ -18,6 +18,24 @@ public sealed class SettingsStoreTests
         Assert.AreEqual(@"C:\Videos", restored.LastDestinationDirectory);
     }
 
+    [TestMethod]
+    public async Task LoadAsync_NullSettings_QuarantinesAndReturnsDefaults()
+    {
+        using var directory = new TemporaryDirectory();
+        var path = Path.Combine(directory.Path, "settings.json");
+        await File.WriteAllTextAsync(
+            path,
+            "{\"schemaVersion\":1,\"settings\":null}",
+            CancellationToken.None);
+        var store = new SettingsStore(path, TimeProvider.System);
+
+        var restored = await store.LoadAsync(CancellationToken.None);
+
+        Assert.IsNull(restored.LastDestinationDirectory);
+        Assert.AreEqual(AtomicStoreLoadStatus.RecoveredCorrupt, store.LastLoadStatus);
+        Assert.IsFalse(File.Exists(path));
+    }
+
     private sealed class TemporaryDirectory : IDisposable
     {
         public TemporaryDirectory() => Path = Directory.CreateTempSubdirectory("vidora-settings-store-test-").FullName;

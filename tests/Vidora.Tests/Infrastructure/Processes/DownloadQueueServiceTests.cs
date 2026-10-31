@@ -238,6 +238,33 @@ public sealed class DownloadQueueServiceTests
         Assert.AreEqual(DownloadStatus.Interrupted, restored.Single().Status);
     }
 
+    [TestMethod]
+    public async Task ProcessingSaveFails_StopsQueueAndSurfacesDiskFailure()
+    {
+        var store = new FailingQueueStore(failOnSaveCall: 2);
+        var downloadCalled = false;
+        var activeDownloads = new ActiveDownloadCoordinator();
+        var service = new DownloadQueueService(
+            new FakeDownloadService((request, _, _) =>
+            {
+                downloadCalled = true;
+                return Task.FromResult(Completed(request));
+            }),
+            store,
+            activeDownloads);
+        await service.InitializeAsync(CancellationToken.None);
+
+        await service.EnqueueAsync(
+            Request("12121212-1212-1212-1212-121212121212"),
+            CancellationToken.None);
+        await WaitUntilAsync(() => service.Items.Single().Status == DownloadStatus.Failed);
+
+        var failed = service.Items.Single();
+        Assert.AreEqual(VidoraErrorCode.DiskFailure, failed.Error?.Code);
+        Assert.IsFalse(downloadCalled);
+        Assert.IsFalse(activeDownloads.HasActiveDownload);
+    }
+
     private static DownloadRequest Request(
         string id,
         IReadOnlyList<VideoFormat>? formats = null,
@@ -330,5 +357,23 @@ public sealed class DownloadQueueServiceTests
             DownloadRequest request,
             IProgress<DownloadProgress> progress,
             CancellationToken cancellationToken) => download(request, progress, cancellationToken);
+    }
+
+    private sealed class FailingQueueStore(int failOnSaveCall) : IQueueStore
+    {
+        private int saveCalls;
+
+        public Task<IReadOnlyList<DownloadQueueItem>> LoadAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<DownloadQueueItem>>([]);
+
+        public Task SaveAsync(IReadOnlyList<DownloadQueueItem> items, CancellationToken cancellationToken)
+        {
+            if (Interlocked.Increment(ref saveCalls) == failOnSaveCall)
+            {
+                throw new IOException("Disk full for test.");
+            }
+
+            return Task.CompletedTask;
+        }
     }
 }

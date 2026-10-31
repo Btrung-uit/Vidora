@@ -1,6 +1,9 @@
 namespace Vidora.Infrastructure.Persistence;
 
-public abstract record VersionedDocument(int SchemaVersion);
+public abstract record VersionedDocument(int SchemaVersion)
+{
+    public abstract bool HasValidShape { get; }
+}
 
 public enum AtomicStoreLoadStatus
 {

@@ -1,3 +1,4 @@
+using System.IO;
 using Vidora.Core.Errors;
 using Vidora.Core.Models;
 using Vidora.Core.Services;
@@ -7,7 +8,7 @@ namespace Vidora.Infrastructure.Processes;
 
 public sealed class DownloadQueueService(
     IDownloadService downloadService,
-    QueueStore queueStore,
+    IQueueStore queueStore,
     IActiveDownloadCoordinator activeDownloads) : IDownloadQueueService
 {
     private readonly object sync = new();
@@ -15,6 +16,7 @@ public sealed class DownloadQueueService(
     private readonly List<DownloadQueueItem> items = [];
     private Task? processor;
     private CancellationTokenSource? activeCancellation;
+    private Guid? currentTaskId;
     private bool initialized;
     private bool paused;
 
@@ -200,97 +202,142 @@ public sealed class DownloadQueueService(
 
     private async Task ProcessAsync()
     {
-        while (true)
+        try
         {
-            DownloadQueueItem active;
-            CancellationTokenSource cancellation;
-            await mutationGate.WaitAsync();
-            try
+            while (true)
             {
-                lock (sync)
+                DownloadQueueItem active;
+                CancellationTokenSource cancellation;
+                await mutationGate.WaitAsync();
+                try
                 {
-                    var index = paused
-                        ? -1
-                        : items.FindIndex(item => item.Status == DownloadStatus.Pending);
-                    if (index < 0)
+                    lock (sync)
                     {
-                        processor = null;
-                        return;
-                    }
-
-                    active = items[index] with
-                    {
-                        Status = DownloadStatus.Downloading,
-                        Progress = null,
-                        FinalPath = null,
-                        Error = null,
-                        AttemptCount = items[index].AttemptCount + 1
-                    };
-                    items[index] = active;
-                    cancellation = new CancellationTokenSource();
-                    activeCancellation = cancellation;
-                }
-
-                await SaveCurrentAsync(CancellationToken.None);
-            }
-            finally
-            {
-                mutationGate.Release();
-            }
-
-            RaiseChanged();
-            var activeToken = activeDownloads.Begin(active.Request.Id, cancellation.Token);
-            DownloadResult result;
-            try
-            {
-                var progress = new Progress<DownloadProgress>(value => UpdateProgress(active.Request.Id, value));
-                result = await downloadService.DownloadAsync(active.Request, progress, activeToken);
-            }
-            catch (OperationCanceledException) when (activeToken.IsCancellationRequested)
-            {
-                result = new DownloadResult(DownloadStatus.Cancelled, null, null);
-            }
-            catch (VidoraException exception)
-            {
-                result = new DownloadResult(DownloadStatus.Failed, null, exception.Error);
-            }
-
-            await mutationGate.WaitAsync();
-            try
-            {
-                lock (sync)
-                {
-                    var index = items.FindIndex(item => item.Request.Id == active.Request.Id);
-                    if (index >= 0)
-                    {
-                        items[index] = items[index] with
+                        var index = paused
+                            ? -1
+                            : items.FindIndex(item => item.Status == DownloadStatus.Pending);
+                        if (index < 0)
                         {
-                            Status = result.Status,
+                            processor = null;
+                            return;
+                        }
+
+                        active = items[index] with
+                        {
+                            Status = DownloadStatus.Downloading,
                             Progress = null,
-                            FinalPath = result.FinalPath,
-                            Error = result.Error
+                            FinalPath = null,
+                            Error = null,
+                            AttemptCount = items[index].AttemptCount + 1
                         };
+                        items[index] = active;
+                        cancellation = new CancellationTokenSource();
+                        activeCancellation = cancellation;
+                        currentTaskId = active.Request.Id;
                     }
 
-                    if (result.Status is DownloadStatus.Cancelled or DownloadStatus.Failed or DownloadStatus.Interrupted)
-                    {
-                        paused = true;
-                    }
-
-                    activeCancellation = null;
+                    await SaveCurrentAsync(CancellationToken.None);
+                }
+                finally
+                {
+                    mutationGate.Release();
                 }
 
-                await SaveCurrentAsync(CancellationToken.None);
+                RaiseChanged();
+                var activeToken = activeDownloads.Begin(active.Request.Id, cancellation.Token);
+                DownloadResult result;
+                try
+                {
+                    var progress = new Progress<DownloadProgress>(value => UpdateProgress(active.Request.Id, value));
+                    result = await downloadService.DownloadAsync(active.Request, progress, activeToken);
+                }
+                catch (OperationCanceledException) when (activeToken.IsCancellationRequested)
+                {
+                    result = new DownloadResult(DownloadStatus.Cancelled, null, null);
+                }
+                catch (VidoraException exception)
+                {
+                    result = new DownloadResult(DownloadStatus.Failed, null, exception.Error);
+                }
+
+                await mutationGate.WaitAsync();
+                try
+                {
+                    lock (sync)
+                    {
+                        var index = items.FindIndex(item => item.Request.Id == active.Request.Id);
+                        if (index >= 0)
+                        {
+                            items[index] = items[index] with
+                            {
+                                Status = result.Status,
+                                Progress = null,
+                                FinalPath = result.FinalPath,
+                                Error = result.Error
+                            };
+                        }
+
+                        if (result.Status is DownloadStatus.Cancelled or DownloadStatus.Failed or DownloadStatus.Interrupted)
+                        {
+                            paused = true;
+                        }
+                    }
+
+                    await SaveCurrentAsync(CancellationToken.None);
+                    lock (sync)
+                    {
+                        activeCancellation = null;
+                        currentTaskId = null;
+                    }
+                }
+                finally
+                {
+                    mutationGate.Release();
+                    activeDownloads.Complete(active.Request.Id);
+                    cancellation.Dispose();
+                }
+
+                RaiseChanged();
             }
-            finally
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            HandlePersistenceFailure(exception);
+        }
+    }
+
+    private void HandlePersistenceFailure(Exception exception)
+    {
+        CancellationTokenSource? cancellation;
+        lock (sync)
+        {
+            var index = currentTaskId is { } taskId
+                ? items.FindIndex(item => item.Request.Id == taskId)
+                : -1;
+            if (index >= 0)
             {
-                mutationGate.Release();
-                activeDownloads.Complete(active.Request.Id);
-                cancellation.Dispose();
+                items[index] = items[index] with
+                {
+                    Status = DownloadStatus.Failed,
+                    Progress = null,
+                    Error = new VidoraError(
+                        VidoraErrorCode.DiskFailure,
+                        "Error.QueuePersistenceFailed",
+                        "Action.TryAgain",
+                        exception.Message,
+                        true)
+                };
             }
 
-            RaiseChanged();
+            paused = true;
+            processor = null;
+            cancellation = activeCancellation;
+            activeCancellation = null;
+            currentTaskId = null;
         }
+
+        cancellation?.Dispose();
+        RaiseChanged();
     }
 
     private void UpdateProgress(Guid taskId, DownloadProgress progress)

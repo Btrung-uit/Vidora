@@ -100,6 +100,70 @@ public sealed class DownloadViewModelQueueTests
         Assert.AreEqual(view.FindResource("Queue.Resume"), resume.Content);
     }
 
+    [STATestMethod]
+    [DoNotParallelize]
+    public void DownloadView_ActiveItemWithEmptyDiscovery_ShowsProgressAndCancel()
+    {
+        var queue = new FakeQueueService();
+        var viewModel = CreateViewModel(queue, new FakeSettingsService(new AppSettings(null)));
+        queue.Add(new DownloadQueueItem(
+            Request(Guid.Parse("33333333-3333-3333-3333-333333333333"), @"C:\Videos"),
+            DownloadStatus.Downloading,
+            new DownloadProgress(25, 25, 100, 10, TimeSpan.FromSeconds(8), "downloading"),
+            null,
+            null,
+            1,
+            false));
+        var view = CreateView(viewModel, 700, 600);
+
+        var activePanel = view.FindName("ActiveDownloadPanel") as FrameworkElement;
+        var cancel = view.FindName("CancelActiveDownloadButton") as Button;
+        Assert.AreEqual(DownloadDiscoveryState.Empty, viewModel.State);
+        Assert.IsNotNull(activePanel);
+        Assert.AreEqual(Visibility.Visible, activePanel.Visibility);
+        Assert.IsNotNull(cancel);
+        Assert.AreEqual(viewModel.CancelDownloadCommand, cancel.Command);
+    }
+
+    [STATestMethod]
+    [DoNotParallelize]
+    public void DownloadView_ManyQueueItems_UsesBoundedScrollableRegion()
+    {
+        var queue = new FakeQueueService();
+        var viewModel = CreateViewModel(queue, new FakeSettingsService(new AppSettings(null)));
+        for (var index = 1; index <= 12; index++)
+        {
+            queue.Add(new DownloadQueueItem(
+                Request(new Guid(index, 0, 0, new byte[8]), @"C:\Videos"),
+                DownloadStatus.Pending,
+                null,
+                null,
+                null,
+                0,
+                false));
+        }
+
+        var view = CreateView(viewModel, 700, 520);
+
+        var scroll = view.FindName("QueueScrollViewer") as ScrollViewer;
+        Assert.IsNotNull(scroll);
+        Assert.IsLessThanOrEqualTo(220, scroll.ActualHeight);
+        Assert.IsGreaterThan(0, scroll.ScrollableHeight);
+    }
+
+    private static DownloadView CreateView(DownloadViewModel viewModel, double width, double height)
+    {
+        var view = new DownloadView { DataContext = viewModel };
+        view.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("/Vidora;component/Resources/Strings.vi-VN.xaml", UriKind.Relative)
+        });
+        view.Measure(new Size(width, height));
+        view.Arrange(new Rect(0, 0, width, height));
+        view.UpdateLayout();
+        return view;
+    }
+
     private static DownloadViewModel CreateViewModel(
         FakeQueueService queue,
         FakeSettingsService settings,

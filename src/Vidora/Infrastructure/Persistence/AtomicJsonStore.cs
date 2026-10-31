@@ -32,15 +32,19 @@ public sealed class AtomicJsonStore<TDocument>(
 
             try
             {
-                await using var stream = new FileStream(
+                TDocument? document;
+                await using (var stream = new FileStream(
                     filePath,
                     FileMode.Open,
                     FileAccess.Read,
                     FileShare.Read,
                     4096,
-                    FileOptions.Asynchronous | FileOptions.SequentialScan);
-                var document = await JsonSerializer.DeserializeAsync<TDocument>(stream, JsonOptions, cancellationToken);
-                if (document is null)
+                    FileOptions.Asynchronous | FileOptions.SequentialScan))
+                {
+                    document = await JsonSerializer.DeserializeAsync<TDocument>(stream, JsonOptions, cancellationToken);
+                }
+
+                if (document is null || !document.HasValidShape)
                 {
                     return RecoverCorrupt();
                 }

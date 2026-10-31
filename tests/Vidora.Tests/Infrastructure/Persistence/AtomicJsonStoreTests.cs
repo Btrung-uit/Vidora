@@ -69,6 +69,22 @@ public sealed class AtomicJsonStoreTests
     }
 
     [TestMethod]
+    public async Task LoadAsync_NullRoot_ClosesFileBeforeQuarantine()
+    {
+        using var directory = new TemporaryDirectory();
+        var path = Path.Combine(directory.Path, "document.json");
+        await File.WriteAllTextAsync(path, "null", CancellationToken.None);
+        var store = CreateStore(path);
+
+        var result = await store.LoadAsync(CancellationToken.None);
+
+        Assert.AreEqual(AtomicStoreLoadStatus.RecoveredCorrupt, result.Status);
+        Assert.AreEqual("default", result.Document.Value);
+        Assert.IsFalse(File.Exists(path));
+        Assert.IsTrue(File.Exists(result.QuarantinedPath));
+    }
+
+    [TestMethod]
     public async Task LoadAsync_UnsupportedSchema_ReturnsControlledDefaultWithoutDestroyingFile()
     {
         using var directory = new TemporaryDirectory();
@@ -99,7 +115,10 @@ public sealed class AtomicJsonStoreTests
     private static AtomicJsonStore<TestDocument> CreateStore(string path) =>
         new(path, 1, () => new TestDocument(1, "default"), new FixedTimeProvider(CorruptAt));
 
-    private sealed record TestDocument(int SchemaVersion, string Value) : VersionedDocument(SchemaVersion);
+    private sealed record TestDocument(int SchemaVersion, string Value) : VersionedDocument(SchemaVersion)
+    {
+        public override bool HasValidShape => Value is not null;
+    }
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {

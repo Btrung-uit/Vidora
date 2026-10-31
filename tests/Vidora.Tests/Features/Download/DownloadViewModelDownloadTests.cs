@@ -52,6 +52,24 @@ public sealed class DownloadViewModelDownloadTests
         Assert.AreEqual("next", viewModel.Metadata?.MediaId);
     }
 
+    [TestMethod]
+    public void QueueChanged_FailedItemBeforePendingTail_PreservesFailureProjection()
+    {
+        var queue = new FakeQueueService();
+        var viewModel = CreateViewModel(queue);
+        var failed = Item(DownloadStatus.Failed);
+        var pending = Item(DownloadStatus.Pending) with
+        {
+            Request = Item(DownloadStatus.Pending).Request with { Id = Guid.NewGuid() }
+        };
+
+        queue.SetItems(failed, pending);
+
+        Assert.AreEqual(DownloadStatus.Failed, viewModel.LastDownloadStatus);
+        Assert.AreEqual(VidoraErrorCode.Unknown, viewModel.DownloadError?.Code);
+        Assert.AreEqual(DownloadStatus.Failed, viewModel.DownloadResult?.Status);
+    }
+
     [STATestMethod]
     [DoNotParallelize]
     public void DownloadView_TerminalStates_ShowLocalizedResults()
@@ -131,9 +149,9 @@ public sealed class DownloadViewModelDownloadTests
 
     private sealed class FakeQueueService : IDownloadQueueService
     {
-        private DownloadQueueItem? item;
+        private IReadOnlyList<DownloadQueueItem> items = [];
 
-        public IReadOnlyList<DownloadQueueItem> Items => item is null ? [] : [item];
+        public IReadOnlyList<DownloadQueueItem> Items => items;
 
         public event EventHandler? Changed;
 
@@ -145,9 +163,10 @@ public sealed class DownloadViewModelDownloadTests
 
         public Task CancelActiveAsync(CancellationToken cancellationToken)
         {
-            if (item?.Status == DownloadStatus.Downloading)
+            var active = items.FirstOrDefault(value => value.Status == DownloadStatus.Downloading);
+            if (active is not null)
             {
-                SetItem(item with { Status = DownloadStatus.Cancelled, Progress = null });
+                SetItem(active with { Status = DownloadStatus.Cancelled, Progress = null });
             }
 
             return Task.CompletedTask;
@@ -163,7 +182,12 @@ public sealed class DownloadViewModelDownloadTests
 
         public void SetItem(DownloadQueueItem value)
         {
-            item = value;
+            SetItems(value);
+        }
+
+        public void SetItems(params DownloadQueueItem[] values)
+        {
+            items = values;
             Changed?.Invoke(this, EventArgs.Empty);
         }
     }

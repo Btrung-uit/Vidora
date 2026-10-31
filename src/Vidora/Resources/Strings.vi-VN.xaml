@@ -39,6 +39,7 @@
     <system:String x:Key="Error.FinalOutputMissing">Không tìm thấy file đầu ra hoàn chỉnh.</system:String>
     <system:String x:Key="Error.OutputOutsideDestination">Đường dẫn đầu ra không an toàn.</system:String>
     <system:String x:Key="Error.TempWorkspaceUnavailable">Không thể tạo thư mục tạm an toàn.</system:String>
+    <system:String x:Key="Error.QueuePersistenceFailed">Không thể lưu trạng thái hàng đợi.</system:String>
     <system:String x:Key="Action.ChooseAnotherQuality">Chọn chất lượng khác.</system:String>
     <system:String x:Key="Action.ChooseAnotherFolder">Chọn thư mục khác.</system:String>
     <system:String x:Key="Error.InvalidUrl">Liên kết video không hợp lệ.</system:String>

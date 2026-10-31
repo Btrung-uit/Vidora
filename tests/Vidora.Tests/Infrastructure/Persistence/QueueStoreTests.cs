@@ -22,6 +22,24 @@ public sealed class QueueStoreTests
         Assert.AreEqual(DownloadStatus.Interrupted, restored[1].Status);
     }
 
+    [TestMethod]
+    [DataRow("{\"schemaVersion\":1}")]
+    [DataRow("{\"schemaVersion\":1,\"items\":[null]}")]
+    public async Task LoadAsync_InvalidDocumentShape_QuarantinesAndReturnsEmptyQueue(string json)
+    {
+        using var directory = new TemporaryDirectory();
+        var path = Path.Combine(directory.Path, "queue.json");
+        await File.WriteAllTextAsync(path, json, CancellationToken.None);
+        var store = new QueueStore(path, TimeProvider.System);
+
+        var restored = await store.LoadAsync(CancellationToken.None);
+
+        Assert.IsEmpty(restored);
+        Assert.AreEqual(AtomicStoreLoadStatus.RecoveredCorrupt, store.LastLoadStatus);
+        Assert.IsFalse(File.Exists(path));
+        Assert.HasCount(1, Directory.GetFiles(directory.Path, "queue.json.corrupt-*"));
+    }
+
     private static DownloadQueueItem Item(Guid id, DownloadStatus status) => new(
         Request(id),
         status,

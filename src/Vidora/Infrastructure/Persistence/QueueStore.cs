@@ -2,7 +2,7 @@ using Vidora.Core.Models;
 
 namespace Vidora.Infrastructure.Persistence;
 
-public sealed class QueueStore
+public sealed class QueueStore : IQueueStore
 {
     private const int SchemaVersion = 1;
     private readonly AtomicJsonStore<QueueDocument> store;
