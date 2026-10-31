@@ -4,7 +4,6 @@ using Vidora.Core.Errors;
 using Vidora.Core.Models;
 using Vidora.Core.Services;
 using Vidora.Features.Download;
-using Vidora.Infrastructure.Processes;
 
 namespace Vidora.Tests.Features.Download;
 
@@ -12,133 +11,63 @@ namespace Vidora.Tests.Features.Download;
 public sealed class DownloadViewModelDownloadTests
 {
     [TestMethod]
-    public async Task StartDownloadCommand_Success_ForwardsProgressAndCompletes()
+    public void QueueChanged_DownloadingItem_ProjectsProgress()
     {
-        using var directory = new TemporaryDirectory();
-        var completion = new TaskCompletionSource<DownloadResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var service = new FakeDownloadService((_, progress, _) =>
-        {
-            progress.Report(new DownloadProgress(50, 100, 200, 25, TimeSpan.FromSeconds(4), "downloading"));
-            return completion.Task;
-        });
-        var viewModel = await ReadyViewModel(service, directory.Path);
+        var queue = new FakeQueueService();
+        var viewModel = CreateViewModel(queue);
+        var progress = new DownloadProgress(50, 100, 200, 25, TimeSpan.FromSeconds(4), "downloading");
 
-        var download = viewModel.StartDownloadCommand.ExecuteAsync(null);
+        queue.SetItem(Item(DownloadStatus.Downloading, progress));
 
         Assert.IsTrue(viewModel.IsDownloading);
-        Assert.IsFalse(viewModel.StartDownloadCommand.CanExecute(null));
-        await WaitUntilAsync(() => viewModel.Progress?.Percent == 50);
-
-        completion.SetResult(new DownloadResult(DownloadStatus.Completed, Path.Combine(directory.Path, "video.mp4"), null));
-        await download;
-
-        Assert.IsFalse(viewModel.IsDownloading);
-        Assert.AreEqual(DownloadStatus.Completed, viewModel.LastDownloadStatus);
-        Assert.AreEqual(DownloadStatus.Completed, viewModel.DownloadResult?.Status);
-        Assert.IsNull(viewModel.DownloadError);
+        Assert.AreEqual(DownloadStatus.Downloading, viewModel.LastDownloadStatus);
+        Assert.AreEqual(50, viewModel.Progress?.Percent);
     }
 
     [TestMethod]
-    public async Task StartDownloadCommand_WhileActive_DoesNotStartSecondDownload()
+    public async Task CancelDownloadCommand_ActiveItem_ProjectsCancelledState()
     {
-        using var directory = new TemporaryDirectory();
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var completion = new TaskCompletionSource<DownloadResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var calls = 0;
-        var service = new FakeDownloadService((_, _, _) =>
-        {
-            calls++;
-            started.TrySetResult();
-            return completion.Task;
-        });
-        var viewModel = await ReadyViewModel(service, directory.Path);
+        var queue = new FakeQueueService();
+        var viewModel = CreateViewModel(queue);
+        queue.SetItem(Item(DownloadStatus.Downloading));
 
-        var first = viewModel.StartDownloadCommand.ExecuteAsync(null);
-        await started.Task;
-        viewModel.StartDownloadCommand.Execute(null);
-
-        Assert.AreEqual(1, calls);
-        completion.SetResult(new DownloadResult(DownloadStatus.Completed, Path.Combine(directory.Path, "video.mp4"), null));
-        await first;
-    }
-
-    [TestMethod]
-    public async Task CancelDownloadCommand_ActiveDownload_CancelsAndMarksCancelled()
-    {
-        using var directory = new TemporaryDirectory();
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var service = new FakeDownloadService(async (_, _, token) =>
-        {
-            started.SetResult();
-            await Task.Delay(Timeout.InfiniteTimeSpan, token);
-            throw new AssertFailedException("Cancellation should stop the active download.");
-        });
-        var viewModel = await ReadyViewModel(service, directory.Path);
-        var download = viewModel.StartDownloadCommand.ExecuteAsync(null);
-        await started.Task;
-
-        viewModel.CancelDownloadCommand.Execute(null);
-        await download;
+        await viewModel.CancelDownloadCommand.ExecuteAsync(null);
 
         Assert.IsFalse(viewModel.IsDownloading);
         Assert.AreEqual(DownloadStatus.Cancelled, viewModel.LastDownloadStatus);
-        Assert.IsNull(viewModel.DownloadResult);
-        Assert.IsNull(viewModel.DownloadError);
     }
 
     [TestMethod]
-    public async Task DiscoverCommand_WhileDownloading_DoesNotReplaceActivePreview()
+    public async Task DiscoverCommand_WhileDownloading_CanPrepareNextQueueItem()
     {
-        using var directory = new TemporaryDirectory();
-        var completion = new TaskCompletionSource<DownloadResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var discovery = new FakeDiscoveryService();
-        var viewModel = await ReadyViewModel(
-            new FakeDownloadService((_, _, _) => completion.Task),
-            directory.Path,
-            discovery);
-        var download = viewModel.StartDownloadCommand.ExecuteAsync(null);
+        var queue = new FakeQueueService();
+        var viewModel = CreateViewModel(queue, new FakeDiscoveryService());
+        queue.SetItem(Item(DownloadStatus.Downloading));
+        viewModel.Url = "https://youtu.be/next";
 
-        viewModel.DiscoverCommand.Execute(null);
-
-        Assert.IsFalse(viewModel.DiscoverCommand.CanExecute(null));
-        Assert.AreEqual(1, discovery.Calls);
-        Assert.AreEqual(DownloadDiscoveryState.Ready, viewModel.State);
-        completion.SetResult(new DownloadResult(DownloadStatus.Completed, Path.Combine(directory.Path, "video.mp4"), null));
-        await download;
-    }
-
-    [TestMethod]
-    public async Task StartDownloadCommand_CoordinatorCancellation_ReleasesActiveDownload()
-    {
-        using var directory = new TemporaryDirectory();
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var activeDownloads = new ActiveDownloadCoordinator();
-        var viewModel = new DownloadViewModel(
-            new FakeDiscoveryService(),
-            new FakeDownloadService(async (_, _, token) =>
-            {
-                started.TrySetResult();
-                await Task.Delay(Timeout.InfiniteTimeSpan, token);
-                throw new AssertFailedException("Coordinator cancellation should stop the download.");
-            }),
-            activeDownloads)
-        {
-            Url = "https://youtu.be/abc123",
-            DestinationDirectory = directory.Path
-        };
         await viewModel.DiscoverCommand.ExecuteAsync(null);
-        var download = viewModel.StartDownloadCommand.ExecuteAsync(null);
-        await started.Task;
 
-        var stopped = await activeDownloads.CancelAndWaitAsync(
-            activeDownloads.ActiveTaskId!.Value,
-            TimeSpan.FromSeconds(1),
-            CancellationToken.None);
-        await download;
+        Assert.IsTrue(viewModel.DiscoverCommand.CanExecute(null));
+        Assert.AreEqual(DownloadDiscoveryState.Ready, viewModel.State);
+        Assert.AreEqual("next", viewModel.Metadata?.MediaId);
+    }
 
-        Assert.IsTrue(stopped);
-        Assert.IsFalse(activeDownloads.HasActiveDownload);
-        Assert.AreEqual(DownloadStatus.Cancelled, viewModel.LastDownloadStatus);
+    [TestMethod]
+    public void QueueChanged_FailedItemBeforePendingTail_PreservesFailureProjection()
+    {
+        var queue = new FakeQueueService();
+        var viewModel = CreateViewModel(queue);
+        var failed = Item(DownloadStatus.Failed);
+        var pending = Item(DownloadStatus.Pending) with
+        {
+            Request = Item(DownloadStatus.Pending).Request with { Id = Guid.NewGuid() }
+        };
+
+        queue.SetItems(failed, pending);
+
+        Assert.AreEqual(DownloadStatus.Failed, viewModel.LastDownloadStatus);
+        Assert.AreEqual(VidoraErrorCode.Unknown, viewModel.DownloadError?.Code);
+        Assert.AreEqual(DownloadStatus.Failed, viewModel.DownloadResult?.Status);
     }
 
     [STATestMethod]
@@ -152,30 +81,9 @@ public sealed class DownloadViewModelDownloadTests
             (DownloadStatus.Cancelled, "Download.Status.Cancelled")
         })
         {
-            using var directory = new TemporaryDirectory();
-            var service = new FakeDownloadService((_, _, token) => terminalStatus switch
-            {
-                DownloadStatus.Completed => Task.FromResult(new DownloadResult(
-                    DownloadStatus.Completed,
-                    Path.Combine(directory.Path, "video.webm"),
-                    null)),
-                DownloadStatus.Failed => Task.FromException<DownloadResult>(new VidoraException(new VidoraError(
-                    VidoraErrorCode.Unknown,
-                    "Error.DownloadFailed",
-                    "Action.TryAgain",
-                    "Failed for test.",
-                    true))),
-                _ => WaitForCancellation(token)
-            });
-            var viewModel = ReadyViewModel(service, directory.Path).GetAwaiter().GetResult();
-            var download = viewModel.StartDownloadCommand.ExecuteAsync(null);
-            if (terminalStatus == DownloadStatus.Cancelled)
-            {
-                viewModel.CancelDownloadCommand.Execute(null);
-            }
-
-            download.GetAwaiter().GetResult();
-            Assert.AreEqual(terminalStatus, viewModel.LastDownloadStatus);
+            var queue = new FakeQueueService();
+            var viewModel = CreateViewModel(queue);
+            queue.SetItem(Item(terminalStatus));
             var view = new DownloadView { DataContext = viewModel };
             view.Resources.MergedDictionaries.Add(new ResourceDictionary
             {
@@ -192,82 +100,103 @@ public sealed class DownloadViewModelDownloadTests
         }
     }
 
-    private static async Task<DownloadViewModel> ReadyViewModel(
-        IDownloadService downloadService,
-        string destination,
-        FakeDiscoveryService? discoveryService = null)
-    {
-        var viewModel = new DownloadViewModel(
+    private static DownloadViewModel CreateViewModel(
+        FakeQueueService queue,
+        IVideoDiscoveryService? discoveryService = null) => new(
             discoveryService ?? new FakeDiscoveryService(),
-            downloadService,
-            new ActiveDownloadCoordinator())
-        {
-            Url = "https://youtu.be/abc123",
-            DestinationDirectory = destination,
-            SelectedQuality = QualityPreset.P1080
-        };
-        await viewModel.DiscoverCommand.ExecuteAsync(null);
-        return viewModel;
+            queue,
+            new StubSettingsService(),
+            TimeProvider.System);
+
+    private static DownloadQueueItem Item(
+        DownloadStatus status,
+        DownloadProgress? progress = null)
+    {
+        var error = status == DownloadStatus.Failed
+            ? new VidoraError(VidoraErrorCode.Unknown, "Error.DownloadFailed", "Action.TryAgain", "test", true)
+            : null;
+        return new DownloadQueueItem(
+            new DownloadRequest(
+                Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                new Uri("https://youtu.be/active"),
+                Metadata("active"),
+                QualityPreset.P720,
+                @"C:\Videos",
+                DateTimeOffset.UtcNow),
+            status,
+            progress,
+            status == DownloadStatus.Completed ? @"C:\Videos\video.mp4" : null,
+            error,
+            1,
+            false);
     }
 
-    private static VideoMetadata Metadata() => new(
-        new Uri("https://youtu.be/abc123"),
+    private static VideoMetadata Metadata(string id) => new(
+        new Uri($"https://youtu.be/{id}"),
         VideoPlatform.YouTube,
-        "abc123",
+        id,
         "Video",
         "Author",
         TimeSpan.FromMinutes(2),
         null,
-        [
-            new VideoFormat("video", "mp4", 1920, 1080, "avc1", "none", 10_000_000),
-            new VideoFormat("audio", "m4a", null, null, "none", "mp4a", 2_000_000)
-        ]);
-
-    private static async Task WaitUntilAsync(Func<bool> condition)
-    {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-        while (!condition())
-        {
-            await Task.Delay(10, timeout.Token);
-        }
-    }
-
-    private static async Task<DownloadResult> WaitForCancellation(CancellationToken cancellationToken)
-    {
-        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-        throw new AssertFailedException("Cancellation should stop the download.");
-    }
+        [new VideoFormat("18", "mp4", 1280, 720, "avc1", "mp4a", 1_000)]);
 
     private sealed class FakeDiscoveryService : IVideoDiscoveryService
     {
-        public int Calls { get; private set; }
-
         public Task<VideoMetadata> DiscoverAsync(string url, CancellationToken cancellationToken) =>
-            Task.FromResult(Discover());
+            Task.FromResult(Metadata(url.EndsWith("next", StringComparison.Ordinal) ? "next" : "active"));
+    }
 
-        private VideoMetadata Discover()
+    private sealed class FakeQueueService : IDownloadQueueService
+    {
+        private IReadOnlyList<DownloadQueueItem> items = [];
+
+        public IReadOnlyList<DownloadQueueItem> Items => items;
+
+        public event EventHandler? Changed;
+
+        public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task EnqueueAsync(DownloadRequest request, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task ResumeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task CancelActiveAsync(CancellationToken cancellationToken)
         {
-            Calls++;
-            return Metadata();
+            var active = items.FirstOrDefault(value => value.Status == DownloadStatus.Downloading);
+            if (active is not null)
+            {
+                SetItem(active with { Status = DownloadStatus.Cancelled, Progress = null });
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> RemovePendingAsync(Guid taskId, CancellationToken cancellationToken) =>
+            Task.FromResult(false);
+
+        public Task PersistInterruptedAsync(
+            Guid taskId,
+            DownloadResult result,
+            CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public void SetItem(DownloadQueueItem value)
+        {
+            SetItems(value);
+        }
+
+        public void SetItems(params DownloadQueueItem[] values)
+        {
+            items = values;
+            Changed?.Invoke(this, EventArgs.Empty);
         }
     }
 
-    private sealed class FakeDownloadService(
-        Func<DownloadRequest, IProgress<DownloadProgress>, CancellationToken, Task<DownloadResult>> download)
-        : IDownloadService
+    private sealed class StubSettingsService : ISettingsService
     {
-        public Task<DownloadResult> DownloadAsync(
-            DownloadRequest request,
-            IProgress<DownloadProgress> progress,
-            CancellationToken cancellationToken) => download(request, progress, cancellationToken);
-    }
+        public Task<AppSettings> LoadAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(new AppSettings(null));
 
-    private sealed class TemporaryDirectory : IDisposable
-    {
-        public TemporaryDirectory() => Path = Directory.CreateTempSubdirectory("vidora-download-vm-test-").FullName;
-
-        public string Path { get; }
-
-        public void Dispose() => Directory.Delete(Path, recursive: true);
+        public Task SaveAsync(AppSettings settings, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

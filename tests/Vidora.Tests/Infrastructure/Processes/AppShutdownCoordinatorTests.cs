@@ -153,4 +153,37 @@ public sealed class AppShutdownCoordinatorTests
         Assert.AreEqual(AppShutdownOutcome.ExitCompleted, outcome);
         Assert.IsFalse(persisted);
     }
+
+    [TestMethod]
+    public async Task RequestShutdownAsync_NextDownloadStartsDuringPrompt_CancelsNewActiveTask()
+    {
+        var active = new ActiveDownloadCoordinator();
+        var firstId = Guid.Parse("66666666-6666-6666-6666-666666666666");
+        var secondId = Guid.Parse("77777777-7777-7777-7777-777777777777");
+        active.Begin(firstId, CancellationToken.None);
+        CancellationToken secondToken = default;
+        Guid? persistedTaskId = null;
+        var coordinator = new AppShutdownCoordinator(
+            active,
+            () =>
+            {
+                active.Complete(firstId);
+                secondToken = active.Begin(secondId, CancellationToken.None);
+                secondToken.Register(() => active.Complete(secondId));
+                return AppShutdownDecision.CancelDownloadAndExit;
+            },
+            (taskId, _, _) =>
+            {
+                persistedTaskId = taskId;
+                return Task.CompletedTask;
+            },
+            TimeSpan.FromSeconds(1));
+
+        var outcome = await coordinator.RequestShutdownAsync(CancellationToken.None);
+
+        Assert.AreEqual(AppShutdownOutcome.ExitCompleted, outcome);
+        Assert.IsTrue(secondToken.IsCancellationRequested);
+        Assert.AreEqual(secondId, persistedTaskId);
+        Assert.IsFalse(active.HasActiveDownload);
+    }
 }

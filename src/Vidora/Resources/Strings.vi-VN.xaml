@@ -27,6 +27,10 @@
     <system:String x:Key="Download.Status.Completed">Đã tải xong video:</system:String>
     <system:String x:Key="Download.Status.Cancelled">Đã hủy tải video.</system:String>
     <system:String x:Key="Download.Status.Failed">Không thể tải video. Vui lòng thử lại.</system:String>
+    <system:String x:Key="Queue.Title">Hàng đợi</system:String>
+    <system:String x:Key="Queue.Resume">_Tiếp tục hàng đợi</system:String>
+    <system:String x:Key="Queue.Remove">_Xóa</system:String>
+    <system:String x:Key="Queue.DuplicateWarning">Liên kết này đã có trong hàng đợi.</system:String>
     <system:String x:Key="Shutdown.Title">Đang tải video</system:String>
     <system:String x:Key="Shutdown.Message">Chọn Có để hủy tải và thoát. Chọn Không để tiếp tục tải.</system:String>
     <system:String x:Key="Error.QualityUnavailable">Không có định dạng phù hợp với chất lượng đã chọn.</system:String>
@@ -35,6 +39,7 @@
     <system:String x:Key="Error.FinalOutputMissing">Không tìm thấy file đầu ra hoàn chỉnh.</system:String>
     <system:String x:Key="Error.OutputOutsideDestination">Đường dẫn đầu ra không an toàn.</system:String>
     <system:String x:Key="Error.TempWorkspaceUnavailable">Không thể tạo thư mục tạm an toàn.</system:String>
+    <system:String x:Key="Error.QueuePersistenceFailed">Không thể lưu trạng thái hàng đợi.</system:String>
     <system:String x:Key="Action.ChooseAnotherQuality">Chọn chất lượng khác.</system:String>
     <system:String x:Key="Action.ChooseAnotherFolder">Chọn thư mục khác.</system:String>
     <system:String x:Key="Error.InvalidUrl">Liên kết video không hợp lệ.</system:String>
@@ -50,6 +55,7 @@
     <system:String x:Key="Action.OpenSettings">Mở Cài đặt để kiểm tra công cụ.</system:String>
     <system:String x:Key="Action.UsePublicVideo">Dùng liên kết của một video công khai.</system:String>
     <system:String x:Key="Settings.Title">Cài đặt</system:String>
+    <system:String x:Key="Settings.PersistenceRecoveryWarning">Một file dữ liệu không thể đọc được. Vidora đã giữ lại file cũ khi có thể và khởi động với dữ liệu mặc định.</system:String>
     <system:String x:Key="Dependency.Description">Kiểm tra các công cụ cần thiết để tải và xử lý video.</system:String>
     <system:String x:Key="Dependency.YtDlp">yt-dlp</system:String>
     <system:String x:Key="Dependency.Ffmpeg">FFmpeg</system:String>

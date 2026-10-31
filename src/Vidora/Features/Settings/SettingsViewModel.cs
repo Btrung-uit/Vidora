@@ -5,8 +5,12 @@ using Vidora.Core.Services;
 
 namespace Vidora.Features.Settings;
 
-public partial class SettingsViewModel(IDependencyService dependencyService) : ObservableObject
+public partial class SettingsViewModel(
+    IDependencyService dependencyService,
+    bool hasPersistenceRecoveryWarning = false) : ObservableObject
 {
+    public bool HasPersistenceRecoveryWarning { get; } = hasPersistenceRecoveryWarning;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsReady))]
     public partial DependencyReport? Report { get; private set; }

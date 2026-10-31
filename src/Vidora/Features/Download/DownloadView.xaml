@@ -13,6 +13,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <TextBlock FontSize="28"
@@ -123,32 +124,6 @@
                                 HorizontalAlignment="Left"
                                 Command="{Binding StartDownloadCommand}"
                                 Content="{DynamicResource Download.Start}" />
-                        <StackPanel Margin="0,14,0,0">
-                            <StackPanel.Style>
-                                <Style TargetType="StackPanel">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsDownloading}" Value="True">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </StackPanel.Style>
-                            <ProgressBar Height="8" Maximum="100" Value="{Binding Progress.Percent}" />
-                            <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
-                                <TextBlock Text="{DynamicResource Download.Bytes}" />
-                                <TextBlock Margin="4,0,12,0" Text="{Binding Progress.DownloadedBytes}" />
-                                <TextBlock Text="{DynamicResource Download.Speed}" />
-                                <TextBlock Margin="4,0,12,0" Text="{Binding Progress.BytesPerSecond}" />
-                                <TextBlock Text="{DynamicResource Download.Eta}" />
-                                <TextBlock Margin="4,0,0,0" Text="{Binding Progress.Eta}" />
-                            </StackPanel>
-                            <Button Margin="0,8,0,0"
-                                    Padding="12,4"
-                                    HorizontalAlignment="Left"
-                                    Command="{Binding CancelDownloadCommand}"
-                                    Content="{DynamicResource Download.Cancel}" />
-                        </StackPanel>
                         <StackPanel x:Name="DownloadResultPanel" Margin="0,14,0,0">
                             <StackPanel.Style>
                                 <Style TargetType="StackPanel">
@@ -229,5 +204,96 @@
                 <TextBlock Text="{DynamicResource Download.DiscoveryFailed}" />
             </StackPanel>
         </Grid>
+
+        <StackPanel Grid.Row="3" Margin="0,16,0,0">
+            <StackPanel x:Name="ActiveDownloadPanel" Margin="0,0,0,12">
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsDownloading}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
+                <ProgressBar Height="8" Maximum="100" Value="{Binding Progress.Percent}" />
+                <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                    <TextBlock Text="{DynamicResource Download.Bytes}" />
+                    <TextBlock Margin="4,0,12,0" Text="{Binding Progress.DownloadedBytes}" />
+                    <TextBlock Text="{DynamicResource Download.Speed}" />
+                    <TextBlock Margin="4,0,12,0" Text="{Binding Progress.BytesPerSecond}" />
+                    <TextBlock Text="{DynamicResource Download.Eta}" />
+                    <TextBlock Margin="4,0,0,0" Text="{Binding Progress.Eta}" />
+                </StackPanel>
+                <Button x:Name="CancelActiveDownloadButton"
+                        Margin="0,8,0,0"
+                        Padding="12,4"
+                        HorizontalAlignment="Left"
+                        Command="{Binding CancelDownloadCommand}"
+                        Content="{DynamicResource Download.Cancel}" />
+            </StackPanel>
+            <DockPanel Margin="0,0,0,8">
+                <TextBlock VerticalAlignment="Center"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="{DynamicResource Queue.Title}" />
+                <Button x:Name="ResumeQueueButton"
+                        DockPanel.Dock="Right"
+                        Padding="12,4"
+                        Command="{Binding ResumeQueueCommand}"
+                        Content="{DynamicResource Queue.Resume}" />
+            </DockPanel>
+            <ScrollViewer x:Name="QueueScrollViewer"
+                          MaxHeight="220"
+                          VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="QueueList" ItemsSource="{Binding QueueItems}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,6"
+                                    Padding="10"
+                                    BorderBrush="{DynamicResource Border.Brush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding Request.Metadata.Title}" />
+                                        <TextBlock Margin="0,3,0,0" Text="{Binding Status}" />
+                                        <TextBlock Margin="0,3,0,0"
+                                                   Foreground="{DynamicResource Text.SecondaryBrush}"
+                                                   Text="{Binding Request.DestinationDirectory}" />
+                                        <TextBlock Margin="0,3,0,0"
+                                                   Foreground="DarkOrange"
+                                                   Text="{DynamicResource Queue.DuplicateWarning}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasDuplicateUrlWarning}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <Button Grid.Column="1"
+                                            Margin="12,0,0,0"
+                                            Padding="10,4"
+                                            VerticalAlignment="Center"
+                                            Command="{Binding DataContext.RemovePendingCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="{DynamicResource Queue.Remove}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </StackPanel>
     </Grid>
 </UserControl>

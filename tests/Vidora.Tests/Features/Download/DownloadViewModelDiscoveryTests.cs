@@ -2,7 +2,6 @@ using Vidora.Core.Errors;
 using Vidora.Core.Models;
 using Vidora.Core.Services;
 using Vidora.Features.Download;
-using Vidora.Infrastructure.Processes;
 
 namespace Vidora.Tests.Features.Download;
 
@@ -13,10 +12,8 @@ public sealed class DownloadViewModelDiscoveryTests
     public async Task DiscoverCommand_Success_TransitionsEmptyToDiscoveringToReady()
     {
         var completion = new TaskCompletionSource<VideoMetadata>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var viewModel = new DownloadViewModel(new FakeDiscoveryService((_, _) => completion.Task), new StubDownloadService(), new ActiveDownloadCoordinator())
-        {
-            Url = "https://youtu.be/abc123"
-        };
+        var viewModel = CreateViewModel(new FakeDiscoveryService((_, _) => completion.Task));
+        viewModel.Url = "https://youtu.be/abc123";
 
         var discovery = viewModel.DiscoverCommand.ExecuteAsync(null);
 
@@ -35,15 +32,13 @@ public sealed class DownloadViewModelDiscoveryTests
     public async Task CancelDiscoveryCommand_ActiveDiscovery_ReturnsToEmpty()
     {
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var viewModel = new DownloadViewModel(new FakeDiscoveryService(async (_, token) =>
+        var viewModel = CreateViewModel(new FakeDiscoveryService(async (_, token) =>
         {
             started.SetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
             throw new AssertFailedException("Cancellation should stop the pending discovery.");
-        }), new StubDownloadService(), new ActiveDownloadCoordinator())
-        {
-            Url = "https://youtu.be/abc123"
-        };
+        }));
+        viewModel.Url = "https://youtu.be/abc123";
         var discovery = viewModel.DiscoverCommand.ExecuteAsync(null);
         await started.Task;
 
@@ -64,11 +59,9 @@ public sealed class DownloadViewModelDiscoveryTests
             "Action.TryAnotherUrl",
             "Fixture unavailable.",
             false);
-        var viewModel = new DownloadViewModel(new FakeDiscoveryService(
-            (_, _) => Task.FromException<VideoMetadata>(new VidoraException(expectedError))), new StubDownloadService(), new ActiveDownloadCoordinator())
-        {
-            Url = "https://youtu.be/missing"
-        };
+        var viewModel = CreateViewModel(new FakeDiscoveryService(
+            (_, _) => Task.FromException<VideoMetadata>(new VidoraException(expectedError))));
+        viewModel.Url = "https://youtu.be/missing";
 
         await viewModel.DiscoverCommand.ExecuteAsync(null);
 
@@ -83,7 +76,7 @@ public sealed class DownloadViewModelDiscoveryTests
         var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var firstCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
-        var viewModel = new DownloadViewModel(new FakeDiscoveryService(async (url, token) =>
+        var viewModel = CreateViewModel(new FakeDiscoveryService(async (url, token) =>
         {
             calls++;
             if (calls == 1)
@@ -94,10 +87,8 @@ public sealed class DownloadViewModelDiscoveryTests
             }
 
             return Metadata(url.EndsWith("second", StringComparison.Ordinal) ? "second" : "unexpected");
-        }), new StubDownloadService(), new ActiveDownloadCoordinator())
-        {
-            Url = "https://youtu.be/first"
-        };
+        }));
+        viewModel.Url = "https://youtu.be/first";
 
         var firstDiscovery = viewModel.DiscoverCommand.ExecuteAsync(null);
         await firstStarted.Task;
@@ -121,6 +112,12 @@ public sealed class DownloadViewModelDiscoveryTests
         new Uri("https://example.test/thumb.jpg"),
         []);
 
+    private static DownloadViewModel CreateViewModel(IVideoDiscoveryService discoveryService) => new(
+        discoveryService,
+        new StubQueueService(),
+        new StubSettingsService(),
+        TimeProvider.System);
+
     private sealed class FakeDiscoveryService(
         Func<string, CancellationToken, Task<VideoMetadata>> discover) : IVideoDiscoveryService
     {
@@ -128,11 +125,33 @@ public sealed class DownloadViewModelDiscoveryTests
             discover(url, cancellationToken);
     }
 
-    private sealed class StubDownloadService : IDownloadService
+    private sealed class StubQueueService : IDownloadQueueService
     {
-        public Task<DownloadResult> DownloadAsync(
-            DownloadRequest request,
-            IProgress<DownloadProgress> progress,
-            CancellationToken cancellationToken) => throw new NotSupportedException();
+        public IReadOnlyList<DownloadQueueItem> Items => [];
+
+        public event EventHandler? Changed;
+
+        public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task EnqueueAsync(DownloadRequest request, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task ResumeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task CancelActiveAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<bool> RemovePendingAsync(Guid taskId, CancellationToken cancellationToken) => Task.FromResult(false);
+
+        public Task PersistInterruptedAsync(Guid taskId, DownloadResult result, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private sealed class StubSettingsService : ISettingsService
+    {
+        public Task<AppSettings> LoadAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(new AppSettings(null));
+
+        public Task SaveAsync(AppSettings settings, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }
