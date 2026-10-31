@@ -10,5 +10,5 @@ public interface IActiveDownloadCoordinator
 
     void Complete(Guid taskId);
 
-    Task<bool> CancelAndWaitAsync(TimeSpan timeout, CancellationToken cancellationToken);
+    Task<bool> CancelAndWaitAsync(Guid taskId, TimeSpan timeout, CancellationToken cancellationToken);
 }

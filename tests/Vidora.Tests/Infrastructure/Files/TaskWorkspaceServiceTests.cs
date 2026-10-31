@@ -93,14 +93,59 @@ public sealed class TaskWorkspaceServiceTests
         Assert.IsTrue(File.Exists(Path.Combine(outside.Path, "keep.txt")));
     }
 
+    [TestMethod]
+    public void Cleanup_LexicalAliasToOwnedCanonicalDirectory_DeletesCanonicalTargetOnly()
+    {
+        using var lexicalRoot = new TemporaryDirectory("vidora-temp-alias-root-");
+        using var canonicalRoot = new TemporaryDirectory("vidora-temp-canonical-root-");
+        var taskId = Guid.Parse("66666666-6666-6666-6666-666666666666");
+        var lexicalTask = Path.Combine(lexicalRoot.Path, taskId.ToString("D"));
+        var canonicalTask = Directory.CreateDirectory(
+            Path.Combine(canonicalRoot.Path, taskId.ToString("D"))).FullName;
+        File.WriteAllText(Path.Combine(canonicalTask, "owned.part"), "temporary");
+        var resolver = new DelegatePathResolver(path =>
+        {
+            var fullPath = Path.GetFullPath(path);
+            if (string.Equals(fullPath, lexicalRoot.Path, StringComparison.OrdinalIgnoreCase))
+            {
+                return canonicalRoot.Path;
+            }
+
+            return string.Equals(fullPath, lexicalTask, StringComparison.OrdinalIgnoreCase)
+                ? canonicalTask
+                : fullPath;
+        });
+        var service = new TaskWorkspaceService(lexicalRoot.Path, resolver);
+        service.Create(taskId);
+
+        var cleaned = service.Cleanup(taskId);
+
+        Assert.IsTrue(cleaned);
+        Assert.IsFalse(Directory.Exists(canonicalTask));
+        Assert.IsTrue(Directory.Exists(lexicalTask));
+    }
+
     private sealed class FullPathResolver : ICanonicalPathResolver
     {
         public string Resolve(string path) => Path.GetFullPath(path);
+
+        public ICanonicalPathLease Acquire(string path) => new FakeLease(Resolve(path));
     }
 
     private sealed class DelegatePathResolver(Func<string, string> resolve) : ICanonicalPathResolver
     {
         public string Resolve(string path) => resolve(path);
+
+        public ICanonicalPathLease Acquire(string path) => new FakeLease(Resolve(path));
+    }
+
+    private sealed class FakeLease(string path) : ICanonicalPathLease
+    {
+        public string Path { get; } = path;
+
+        public void Dispose()
+        {
+        }
     }
 
     private sealed class TemporaryDirectory : IDisposable

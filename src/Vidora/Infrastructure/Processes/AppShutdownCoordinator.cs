@@ -22,7 +22,11 @@ public sealed class AppShutdownCoordinator(
             return AppShutdownOutcome.ContinueRunning;
         }
 
-        await activeDownloads.CancelAndWaitAsync(shutdownTimeout, cancellationToken);
+        if (!await activeDownloads.CancelAndWaitAsync(taskId.Value, shutdownTimeout, cancellationToken))
+        {
+            return AppShutdownOutcome.ExitCompleted;
+        }
+
         try
         {
             await persistInterrupted(

@@ -131,6 +131,7 @@ public sealed class DownloadViewModelDownloadTests
         await started.Task;
 
         var stopped = await activeDownloads.CancelAndWaitAsync(
+            activeDownloads.ActiveTaskId!.Value,
             TimeSpan.FromSeconds(1),
             CancellationToken.None);
         await download;

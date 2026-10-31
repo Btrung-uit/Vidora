@@ -126,4 +126,31 @@ public sealed class AppShutdownCoordinatorTests
         Assert.AreEqual(AppShutdownOutcome.ExitCompleted, outcome);
         Assert.IsLessThan(TimeSpan.FromSeconds(1), stopwatch.Elapsed);
     }
+
+    [TestMethod]
+    public async Task RequestShutdownAsync_DownloadCompletesDuringPrompt_DoesNotPersistInterrupted()
+    {
+        var active = new ActiveDownloadCoordinator();
+        var taskId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        active.Begin(taskId, CancellationToken.None);
+        var persisted = false;
+        var coordinator = new AppShutdownCoordinator(
+            active,
+            () =>
+            {
+                active.Complete(taskId);
+                return AppShutdownDecision.CancelDownloadAndExit;
+            },
+            (_, _, _) =>
+            {
+                persisted = true;
+                return Task.CompletedTask;
+            },
+            TimeSpan.FromSeconds(1));
+
+        var outcome = await coordinator.RequestShutdownAsync(CancellationToken.None);
+
+        Assert.AreEqual(AppShutdownOutcome.ExitCompleted, outcome);
+        Assert.IsFalse(persisted);
+    }
 }

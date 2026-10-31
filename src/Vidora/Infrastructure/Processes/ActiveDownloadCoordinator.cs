@@ -51,49 +51,87 @@ public sealed class ActiveDownloadCoordinator : IActiveDownloadCoordinator
     public void Complete(Guid taskId)
     {
         ActiveDownload? completed = null;
+        CancellationTokenSource? cancellationToDispose = null;
         lock (sync)
         {
             if (activeDownload?.TaskId == taskId)
             {
                 completed = activeDownload;
                 activeDownload = null;
+                completed.Completion.TrySetResult();
+                if (!completed.ShutdownRequested || completed.ShutdownCallFinished)
+                {
+                    completed.Disposed = true;
+                    cancellationToDispose = completed.Cancellation;
+                }
             }
         }
 
-        if (completed is not null)
-        {
-            completed.Completion.TrySetResult();
-            completed.Cancellation.Dispose();
-        }
+        cancellationToDispose?.Dispose();
     }
 
-    public async Task<bool> CancelAndWaitAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    public async Task<bool> CancelAndWaitAsync(
+        Guid taskId,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
     {
         ActiveDownload? active;
         lock (sync)
         {
             active = activeDownload;
+            if (active?.TaskId != taskId)
+            {
+                return false;
+            }
+
+            active.ShutdownRequested = true;
         }
 
-        if (active is null)
-        {
-            return true;
-        }
-
-        active.Cancellation.Cancel();
         try
         {
-            await active.Completion.Task.WaitAsync(timeout, cancellationToken);
+            active.Cancellation.Cancel();
+            try
+            {
+                await active.Completion.Task.WaitAsync(timeout, cancellationToken);
+            }
+            catch (TimeoutException)
+            {
+            }
+
             return true;
         }
-        catch (TimeoutException)
+        finally
         {
-            return false;
+            CancellationTokenSource? cancellationToDispose = null;
+            lock (sync)
+            {
+                active.ShutdownCallFinished = true;
+                if (active.Completion.Task.IsCompleted && !active.Disposed)
+                {
+                    active.Disposed = true;
+                    cancellationToDispose = active.Cancellation;
+                }
+            }
+
+            cancellationToDispose?.Dispose();
         }
     }
 
-    private sealed record ActiveDownload(
-        Guid TaskId,
-        CancellationTokenSource Cancellation,
-        TaskCompletionSource Completion);
+    private sealed class ActiveDownload(
+        Guid taskId,
+        CancellationTokenSource cancellation,
+        TaskCompletionSource completion)
+    {
+        public Guid TaskId { get; } = taskId;
+
+        public CancellationTokenSource Cancellation { get; } = cancellation;
+
+        public TaskCompletionSource Completion { get; } = completion;
+
+        public bool ShutdownRequested { get; set; }
+
+        public bool ShutdownCallFinished { get; set; }
+
+        public bool Disposed { get; set; }
+    }
 }

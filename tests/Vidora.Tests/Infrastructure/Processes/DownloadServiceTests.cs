@@ -153,19 +153,23 @@ public sealed class DownloadServiceTests
 
         var outputIndex = captured.Arguments.ToList().IndexOf("--output");
         var outputTemplate = captured.Arguments[outputIndex + 1];
-        Assert.IsTrue(Path.GetFullPath(outputTemplate).StartsWith(
-            Path.GetFullPath(directory.Path) + Path.DirectorySeparatorChar,
-            StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(Path.IsPathRooted(outputTemplate));
+        StringAssert.StartsWith(outputTemplate, "Video Việt [YouTube-abc123]");
         StringAssert.EndsWith(outputTemplate, ".%(ext)s");
 
         var progressIndex = captured.Arguments.ToList().IndexOf("--progress-template");
         StringAssert.StartsWith(captured.Arguments[progressIndex + 1], "download:VIDORA_PROGRESS:");
         var printIndex = captured.Arguments.ToList().IndexOf("--print");
         Assert.AreEqual("after_move:VIDORA_RESULT:%(filepath)s", captured.Arguments[printIndex + 1]);
-        var pathsIndex = captured.Arguments.ToList().IndexOf("--paths");
-        Assert.AreEqual(
-            $"temp:{Path.Combine(directory.Path, "temp", request.Id.ToString("D"))}",
-            captured.Arguments[pathsIndex + 1]);
+        var pathValues = captured.Arguments
+            .Select((argument, index) => (argument, index))
+            .Where(item => item.argument == "--paths")
+            .Select(item => captured.Arguments[item.index + 1])
+            .ToArray();
+        CollectionAssert.Contains(pathValues, $"home:{directory.Path}");
+        CollectionAssert.Contains(
+            pathValues,
+            $"temp:{Path.Combine(directory.Path, "temp", request.Id.ToString("D"))}");
         Assert.IsFalse(Directory.Exists(Path.Combine(directory.Path, "temp", request.Id.ToString("D"))));
     }
 
@@ -194,8 +198,30 @@ public sealed class DownloadServiceTests
         var outputIndex = captured.Arguments.ToList().IndexOf("--output");
         var outputTemplate = captured.Arguments[outputIndex + 1];
         Assert.AreEqual(
-            Path.Combine(destination, "100% %(title)s [YouTube-abc123]").Replace("%", "%%", StringComparison.Ordinal) + ".%(ext)s",
+            "100% %(title)s [YouTube-abc123]".Replace("%", "%%", StringComparison.Ordinal) + ".%(ext)s",
             outputTemplate);
+    }
+
+    [TestMethod]
+    public async Task DownloadAsync_WorkspaceCreationFails_ThrowsStableDiskError()
+    {
+        using var directory = new TemporaryDirectory();
+        var request = Request(directory.Path);
+        var workspace = new TaskWorkspaceService(
+            Path.Combine(directory.Path, "temp"),
+            new WindowsCanonicalPathResolver());
+        workspace.Create(request.Id);
+        var runner = new FakeProcessRunner((_, _, _) =>
+            throw new AssertFailedException("Process must not start when workspace creation fails."));
+
+        var exception = await Assert.ThrowsAsync<VidoraException>(() =>
+            CreateService(runner, directory.Path, workspace).DownloadAsync(
+                request,
+                new CapturedProgress(),
+                CancellationToken.None));
+
+        Assert.AreEqual(VidoraErrorCode.DiskFailure, exception.Error.Code);
+        Assert.AreEqual("Error.TempWorkspaceUnavailable", exception.Error.UserMessageKey);
     }
 
     [TestMethod]
@@ -223,10 +249,13 @@ public sealed class DownloadServiceTests
         Assert.IsTrue(File.Exists(keepFile));
     }
 
-    private static DownloadService CreateService(IProcessRunner runner, string testRoot) => new(
+    private static DownloadService CreateService(
+        IProcessRunner runner,
+        string testRoot,
+        TaskWorkspaceService? workspace = null) => new(
         runner,
         new AppToolPaths(@"C:\tools\yt-dlp.exe", @"C:\tools\ffmpeg\ffmpeg.exe"),
-        new TaskWorkspaceService(
+        workspace ?? new TaskWorkspaceService(
             Path.Combine(testRoot, "temp"),
             new WindowsCanonicalPathResolver()));
 

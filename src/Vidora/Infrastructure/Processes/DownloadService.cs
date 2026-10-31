@@ -24,10 +24,24 @@ public sealed class DownloadService(
             request.Metadata.Title,
             request.Metadata.Platform,
             request.Metadata.MediaId);
-        var outputTemplate = Path.Combine(destination, baseName)
-            .Replace("%", "%%", StringComparison.Ordinal) + ".%(ext)s";
+        var outputTemplate = baseName.Replace("%", "%%", StringComparison.Ordinal) + ".%(ext)s";
         var formatSelector = FormatSelector.Select(request.Metadata.Formats, request.Quality);
-        var taskDirectory = taskWorkspaceService.Create(request.Id);
+        string taskDirectory;
+        try
+        {
+            taskDirectory = taskWorkspaceService.Create(request.Id);
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            throw new VidoraException(new VidoraError(
+                VidoraErrorCode.DiskFailure,
+                "Error.TempWorkspaceUnavailable",
+                "Action.TryAgain",
+                exception.Message,
+                true));
+        }
+
         try
         {
             string? finalPath = null;
@@ -53,6 +67,7 @@ public sealed class DownloadService(
                         toolPaths.FfmpegPath,
                         formatSelector,
                         outputTemplate,
+                        destination,
                         taskDirectory,
                         request.SourceUrl.OriginalString),
                     output,

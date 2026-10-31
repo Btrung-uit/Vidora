@@ -12,17 +12,24 @@ public sealed class WindowsCanonicalPathResolver : ICanonicalPathResolver
 
     public string Resolve(string path)
     {
+        using var lease = Acquire(path);
+        return lease.Path;
+    }
+
+    public ICanonicalPathLease Acquire(string path)
+    {
         var fullPath = Path.GetFullPath(path);
-        using var handle = CreateFile(
+        var handle = CreateFile(
             fullPath,
             0,
-            FileShare.ReadWrite | FileShare.Delete,
+            FileShare.ReadWrite,
             IntPtr.Zero,
             FileMode.Open,
             FileFlagBackupSemantics,
             IntPtr.Zero);
         if (handle.IsInvalid)
         {
+            handle.Dispose();
             throw new IOException(
                 $"Could not resolve canonical path '{fullPath}'.",
                 new Win32Exception(Marshal.GetLastWin32Error()));
@@ -32,6 +39,7 @@ public sealed class WindowsCanonicalPathResolver : ICanonicalPathResolver
         var length = GetFinalPathNameByHandle(handle, buffer, (uint)buffer.Capacity, 0);
         if (length == 0)
         {
+            handle.Dispose();
             throw new IOException(
                 $"Could not resolve canonical path '{fullPath}'.",
                 new Win32Exception(Marshal.GetLastWin32Error()));
@@ -43,11 +51,12 @@ public sealed class WindowsCanonicalPathResolver : ICanonicalPathResolver
             length = GetFinalPathNameByHandle(handle, buffer, (uint)buffer.Capacity, 0);
             if (length == 0 || length >= buffer.Capacity)
             {
+                handle.Dispose();
                 throw new IOException($"Canonical path is too long for '{fullPath}'.");
             }
         }
 
-        return RemoveDevicePrefix(buffer.ToString());
+        return new CanonicalPathLease(RemoveDevicePrefix(buffer.ToString()), handle);
     }
 
     private static string RemoveDevicePrefix(string path) => path.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)
@@ -72,4 +81,11 @@ public sealed class WindowsCanonicalPathResolver : ICanonicalPathResolver
         StringBuilder filePath,
         uint filePathLength,
         uint flags);
+
+    private sealed class CanonicalPathLease(string path, SafeFileHandle handle) : ICanonicalPathLease
+    {
+        public string Path { get; } = path;
+
+        public void Dispose() => handle.Dispose();
+    }
 }
