@@ -12,7 +12,7 @@ public sealed class DownloadViewModelDiscoveryTests
     public async Task DiscoverCommand_Success_TransitionsEmptyToDiscoveringToReady()
     {
         var completion = new TaskCompletionSource<VideoMetadata>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var viewModel = new DownloadViewModel(new FakeDiscoveryService((_, _) => completion.Task))
+        var viewModel = new DownloadViewModel(new FakeDiscoveryService((_, _) => completion.Task), new StubDownloadService())
         {
             Url = "https://youtu.be/abc123"
         };
@@ -39,7 +39,7 @@ public sealed class DownloadViewModelDiscoveryTests
             started.SetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
             throw new AssertFailedException("Cancellation should stop the pending discovery.");
-        }))
+        }), new StubDownloadService())
         {
             Url = "https://youtu.be/abc123"
         };
@@ -64,7 +64,7 @@ public sealed class DownloadViewModelDiscoveryTests
             "Fixture unavailable.",
             false);
         var viewModel = new DownloadViewModel(new FakeDiscoveryService(
-            (_, _) => Task.FromException<VideoMetadata>(new VidoraException(expectedError))))
+            (_, _) => Task.FromException<VideoMetadata>(new VidoraException(expectedError))), new StubDownloadService())
         {
             Url = "https://youtu.be/missing"
         };
@@ -93,7 +93,7 @@ public sealed class DownloadViewModelDiscoveryTests
             }
 
             return Metadata(url.EndsWith("second", StringComparison.Ordinal) ? "second" : "unexpected");
-        }))
+        }), new StubDownloadService())
         {
             Url = "https://youtu.be/first"
         };
@@ -125,5 +125,13 @@ public sealed class DownloadViewModelDiscoveryTests
     {
         public Task<VideoMetadata> DiscoverAsync(string url, CancellationToken cancellationToken) =>
             discover(url, cancellationToken);
+    }
+
+    private sealed class StubDownloadService : IDownloadService
+    {
+        public Task<DownloadResult> DownloadAsync(
+            DownloadRequest request,
+            IProgress<DownloadProgress> progress,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

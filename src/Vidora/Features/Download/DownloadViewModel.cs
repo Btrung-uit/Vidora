@@ -15,7 +15,9 @@ public enum DownloadDiscoveryState
     Failed
 }
 
-public partial class DownloadViewModel(IVideoDiscoveryService discoveryService) : ObservableObject
+public partial class DownloadViewModel(
+    IVideoDiscoveryService discoveryService,
+    IDownloadService downloadService) : ObservableObject
 {
     private CancellationTokenSource? activeDiscovery;
 
@@ -26,10 +28,37 @@ public partial class DownloadViewModel(IVideoDiscoveryService discoveryService) 
     public partial DownloadDiscoveryState State { get; private set; }
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartDownloadCommand))]
     public partial VideoMetadata? Metadata { get; private set; }
 
     [ObservableProperty]
     public partial VidoraError? Error { get; private set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartDownloadCommand))]
+    public partial string DestinationDirectory { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial QualityPreset SelectedQuality { get; set; } = QualityPreset.Best;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartDownloadCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DiscoverCommand))]
+    public partial bool IsDownloading { get; private set; }
+
+    [ObservableProperty]
+    public partial DownloadProgress? Progress { get; private set; }
+
+    [ObservableProperty]
+    public partial DownloadResult? DownloadResult { get; private set; }
+
+    [ObservableProperty]
+    public partial VidoraError? DownloadError { get; private set; }
+
+    [ObservableProperty]
+    public partial DownloadStatus? LastDownloadStatus { get; private set; }
+
+    public IReadOnlyList<QualityPreset> QualityPresets { get; } = Enum.GetValues<QualityPreset>();
 
     [RelayCommand]
     private void Paste()
@@ -40,9 +69,16 @@ public partial class DownloadViewModel(IVideoDiscoveryService discoveryService) 
         }
     }
 
-    [RelayCommand(AllowConcurrentExecutions = true)]
+    private bool CanDiscover() => !IsDownloading;
+
+    [RelayCommand(CanExecute = nameof(CanDiscover), AllowConcurrentExecutions = true)]
     private async Task DiscoverAsync(CancellationToken cancellationToken)
     {
+        if (!CanDiscover())
+        {
+            return;
+        }
+
         var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var previous = Interlocked.Exchange(ref activeDiscovery, operation);
         previous?.Cancel();
@@ -84,4 +120,56 @@ public partial class DownloadViewModel(IVideoDiscoveryService discoveryService) 
 
     [RelayCommand]
     private void CancelDiscovery() => Volatile.Read(ref activeDiscovery)?.Cancel();
+
+    private bool CanStartDownload() =>
+        Metadata is not null &&
+        !string.IsNullOrWhiteSpace(DestinationDirectory) &&
+        !IsDownloading;
+
+    [RelayCommand(CanExecute = nameof(CanStartDownload))]
+    private async Task StartDownloadAsync(CancellationToken cancellationToken)
+    {
+        if (!CanStartDownload() || Metadata is null)
+        {
+            return;
+        }
+
+        IsDownloading = true;
+        Progress = null;
+        DownloadResult = null;
+        DownloadError = null;
+        LastDownloadStatus = DownloadStatus.Downloading;
+
+        try
+        {
+            var progress = new Progress<DownloadProgress>(value => Progress = value);
+            DownloadResult = await downloadService.DownloadAsync(
+                new DownloadRequest(
+                    Guid.NewGuid(),
+                    Metadata.SourceUrl,
+                    Metadata,
+                    SelectedQuality,
+                    DestinationDirectory,
+                    DateTimeOffset.UtcNow),
+                progress,
+                cancellationToken);
+            LastDownloadStatus = DownloadResult.Status;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            LastDownloadStatus = DownloadStatus.Cancelled;
+        }
+        catch (VidoraException exception)
+        {
+            DownloadError = exception.Error;
+            LastDownloadStatus = DownloadStatus.Failed;
+        }
+        finally
+        {
+            IsDownloading = false;
+        }
+    }
+
+    [RelayCommand]
+    private void CancelDownload() => StartDownloadCommand.Cancel();
 }
