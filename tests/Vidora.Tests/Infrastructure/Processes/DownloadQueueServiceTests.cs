@@ -331,6 +331,73 @@ public sealed class DownloadQueueServiceTests
         Assert.IsFalse(activeDownloads.HasActiveDownload);
     }
 
+    [TestMethod]
+    public async Task HistorySaveFails_CompletedDownloadStaysCompletedAndResumeReconcilesSnapshot()
+    {
+        using var context = new QueueTestContext();
+        context.History.FailAdds = true;
+        var request = Request("16161616-1616-1616-1616-161616161616");
+        var service = await context.CreateService((_, _, _) => Task.FromResult(Completed(request)));
+
+        await service.EnqueueAsync(request, CancellationToken.None);
+        await WaitUntilAsync(() => context.History.AddCalls == 1);
+
+        var completed = service.Items.Single();
+        Assert.AreEqual(DownloadStatus.Completed, completed.Status);
+        Assert.IsNotNull(completed.FinalPath);
+        Assert.IsFalse(completed.IsHistoryRecorded);
+        Assert.IsTrue(service.HasHistoryPersistenceError);
+
+        context.History.FailAdds = false;
+        await service.ResumeAsync(CancellationToken.None);
+        await WaitUntilAsync(() => service.Items.Single().IsHistoryRecorded);
+
+        Assert.AreEqual(DownloadStatus.Completed, service.Items.Single().Status);
+        Assert.IsFalse(service.HasHistoryPersistenceError);
+        Assert.HasCount(1, context.History.Items);
+    }
+
+    [TestMethod]
+    public async Task InitializeAsync_CrashRestoredDownload_AddsInterruptedHistoryOnlyOnce()
+    {
+        using var directory = new TemporaryDirectory("vidora-history-recovery-test-");
+        var queuePath = Path.Combine(directory.Path, "queue.json");
+        var historyPath = Path.Combine(directory.Path, "history.json");
+        var request = Request("17171717-1717-1717-1717-171717171717");
+        var queueStore = new QueueStore(queuePath, TimeProvider.System);
+        await queueStore.SaveAsync(
+            [new DownloadQueueItem(request, DownloadStatus.Downloading, null, null, null, 1, false)],
+            CancellationToken.None);
+        var firstTime = new DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero);
+        var history = new HistoryService(historyPath, TimeProvider.System);
+        var first = new DownloadQueueService(
+            new FakeDownloadService((_, _, _) => throw new AssertFailedException("Restored queue must stay stopped.")),
+            new QueueStore(queuePath, TimeProvider.System),
+            new ActiveDownloadCoordinator(),
+            history,
+            new FixedTimeProvider(firstTime));
+
+        await first.InitializeAsync(CancellationToken.None);
+
+        var firstHistory = await history.LoadAsync(CancellationToken.None);
+        Assert.HasCount(1, firstHistory);
+        Assert.AreEqual(DownloadStatus.Interrupted, firstHistory[0].Status);
+        Assert.AreEqual(firstTime, firstHistory[0].Timestamp);
+        Assert.IsTrue(first.Items.Single().IsHistoryRecorded);
+
+        var second = new DownloadQueueService(
+            new FakeDownloadService((_, _, _) => throw new AssertFailedException("Restored queue must stay stopped.")),
+            new QueueStore(queuePath, TimeProvider.System),
+            new ActiveDownloadCoordinator(),
+            history,
+            new FixedTimeProvider(firstTime.AddHours(1)));
+        await second.InitializeAsync(CancellationToken.None);
+
+        var secondHistory = await history.LoadAsync(CancellationToken.None);
+        Assert.HasCount(1, secondHistory);
+        Assert.AreEqual(firstTime, secondHistory[0].Timestamp);
+    }
+
     private static DownloadRequest Request(
         string id,
         IReadOnlyList<VideoFormat>? formats = null,
@@ -470,6 +537,10 @@ public sealed class DownloadQueueServiceTests
         private readonly object sync = new();
         private readonly List<DownloadHistoryItem> items = [];
 
+        public bool FailAdds { get; set; }
+
+        public int AddCalls { get; private set; }
+
         public IReadOnlyList<DownloadHistoryItem> Items
         {
             get
@@ -486,6 +557,12 @@ public sealed class DownloadQueueServiceTests
 
         public Task AddAsync(DownloadHistoryItem item, CancellationToken cancellationToken)
         {
+            AddCalls++;
+            if (FailAdds)
+            {
+                throw new IOException("History disk full for test.");
+            }
+
             lock (sync)
             {
                 items.RemoveAll(existing =>
@@ -510,5 +587,12 @@ public sealed class DownloadQueueServiceTests
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => utcNow;
+    }
+
+    private sealed class TemporaryDirectory(string prefix) : IDisposable
+    {
+        public string Path { get; } = Directory.CreateTempSubdirectory(prefix).FullName;
+
+        public void Dispose() => Directory.Delete(Path, recursive: true);
     }
 }

@@ -2,6 +2,7 @@ using Vidora.Core.Errors;
 using Vidora.Core.Models;
 using Vidora.Core.Services;
 using Vidora.Features.History;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -43,6 +44,29 @@ public sealed class HistoryViewModelTests
         Assert.IsTrue(row.IsMissing);
         Assert.AreEqual(0, history.AddCalls);
         Assert.AreEqual(0, history.ClearCalls);
+    }
+
+    [TestMethod]
+    public async Task RefreshAvailability_FileDeleted_NotifiesBindingAndDisablesOpenFile()
+    {
+        using var directory = new TemporaryDirectory();
+        var mediaPath = Path.Combine(directory.Path, "video.mp4");
+        await File.WriteAllTextAsync(mediaPath, "media", CancellationToken.None);
+        var viewModel = CreateViewModel(
+            history: new FakeHistoryService([Item(finalPath: mediaPath, destination: directory.Path)]));
+        await viewModel.InitializeAsync(CancellationToken.None);
+        var row = viewModel.Items.Single();
+        var missingNotifications = 0;
+        row.PropertyChanged += (_, args) =>
+            missingNotifications += args.PropertyName == nameof(HistoryItemViewModel.IsMissing) ? 1 : 0;
+        Assert.IsTrue(viewModel.OpenFileCommand.CanExecute(row));
+
+        File.Delete(mediaPath);
+        viewModel.RefreshAvailability();
+
+        Assert.AreEqual(1, missingNotifications);
+        Assert.IsTrue(row.IsMissing);
+        Assert.IsFalse(viewModel.OpenFileCommand.CanExecute(row));
     }
 
     [TestMethod]
@@ -155,6 +179,85 @@ public sealed class HistoryViewModelTests
         Assert.HasCount(2, viewModel.Items);
     }
 
+    [TestMethod]
+    public async Task QueueChanged_HistoryLoadFails_KeepsProjectionAndShowsPersistenceError()
+    {
+        var context = new QueuedSynchronizationContext();
+        var history = new FakeHistoryService([Item()]);
+        var queue = new FakeQueueService();
+        var viewModel = CreateViewModel(history, queue, synchronizationContext: context);
+        await viewModel.InitializeAsync(CancellationToken.None);
+        history.LoadException = new IOException("History file locked.");
+
+        await Task.Run(queue.NotifyChanged);
+        context.Drain();
+
+        Assert.HasCount(1, viewModel.Items);
+        Assert.IsTrue(viewModel.HasPersistenceError);
+    }
+
+    [TestMethod]
+    public async Task QueueChanged_HistoryWriteFailure_ShowsPersistenceError()
+    {
+        var context = new QueuedSynchronizationContext();
+        var queue = new FakeQueueService();
+        var viewModel = CreateViewModel(queue: queue, synchronizationContext: context);
+        await viewModel.InitializeAsync(CancellationToken.None);
+        queue.HasHistoryPersistenceError = true;
+
+        await Task.Run(queue.NotifyChanged);
+        context.Drain();
+
+        Assert.IsTrue(viewModel.HasPersistenceError);
+    }
+
+    [TestMethod]
+    public async Task OpenFileCommand_LaunchFails_ShowsOperationError()
+    {
+        using var directory = new TemporaryDirectory();
+        var mediaPath = Path.Combine(directory.Path, "video.mp4");
+        await File.WriteAllTextAsync(mediaPath, "media", CancellationToken.None);
+        var viewModel = CreateViewModel(
+            history: new FakeHistoryService([Item(finalPath: mediaPath, destination: directory.Path)]),
+            openPath: _ => throw new Win32Exception("No associated application."));
+        await viewModel.InitializeAsync(CancellationToken.None);
+
+        viewModel.OpenFileCommand.Execute(viewModel.Items.Single());
+
+        Assert.IsTrue(viewModel.HasOperationError);
+    }
+
+    [TestMethod]
+    public async Task ClearCommand_HistorySaveFails_KeepsProjectionAndShowsPersistenceError()
+    {
+        var history = new FakeHistoryService([Item()])
+        {
+            ClearException = new IOException("History file locked.")
+        };
+        var viewModel = CreateViewModel(history: history);
+        await viewModel.InitializeAsync(CancellationToken.None);
+
+        await viewModel.ClearCommand.ExecuteAsync(null);
+
+        Assert.HasCount(1, viewModel.Items);
+        Assert.IsTrue(viewModel.HasPersistenceError);
+    }
+
+    [TestMethod]
+    public async Task RetryCommand_QueueSaveFails_ShowsPersistenceError()
+    {
+        var queue = new FakeQueueService
+        {
+            EnqueueException = new IOException("Queue file locked.")
+        };
+        var viewModel = CreateViewModel(queue: queue);
+        await viewModel.InitializeAsync(CancellationToken.None);
+
+        await viewModel.RetryCommand.ExecuteAsync(viewModel.Items.Single());
+
+        Assert.IsTrue(viewModel.HasPersistenceError);
+    }
+
     [STATestMethod]
     [DoNotParallelize]
     public void HistoryView_LoadedItem_RendersListAndClearAction()
@@ -178,6 +281,48 @@ public sealed class HistoryViewModelTests
         Assert.IsNotNull(clear);
         Assert.AreEqual(view.FindResource("History.Clear"), clear.Content);
         Assert.AreEqual(viewModel.ClearCommand, clear.Command);
+    }
+
+    [STATestMethod]
+    [DoNotParallelize]
+    public void HistoryView_FileDeletedAndRefreshed_ShowsMissingAndDisablesOpenFile()
+    {
+        using var directory = new TemporaryDirectory();
+        var mediaPath = Path.Combine(directory.Path, "video.mp4");
+        File.WriteAllText(mediaPath, "media");
+        var viewModel = CreateViewModel(
+            history: new FakeHistoryService([Item(finalPath: mediaPath, destination: directory.Path)]));
+        viewModel.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult();
+        var view = CreateView(viewModel);
+        var list = (ItemsControl)view.FindName("HistoryList");
+        var presenter = list.ItemContainerGenerator.ContainerFromIndex(0) as ContentPresenter;
+        Assert.IsNotNull(presenter);
+        var missing = list.ItemTemplate.FindName("MissingStatusText", presenter) as TextBlock;
+        var open = list.ItemTemplate.FindName("OpenFileButton", presenter) as Button;
+        Assert.IsNotNull(missing);
+        Assert.IsNotNull(open);
+        Assert.AreEqual(Visibility.Collapsed, missing.Visibility);
+        Assert.IsTrue(open.IsEnabled);
+
+        File.Delete(mediaPath);
+        viewModel.RefreshAvailability();
+        view.UpdateLayout();
+
+        Assert.AreEqual(Visibility.Visible, missing.Visibility);
+        Assert.IsFalse(open.IsEnabled);
+    }
+
+    private static HistoryView CreateView(HistoryViewModel viewModel)
+    {
+        var view = new HistoryView { DataContext = viewModel };
+        view.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("/Vidora;component/Resources/Strings.vi-VN.xaml", UriKind.Relative)
+        });
+        view.Measure(new Size(700, 500));
+        view.Arrange(new Rect(0, 0, 700, 500));
+        view.UpdateLayout();
+        return view;
     }
 
     private static HistoryViewModel CreateViewModel(
@@ -221,8 +366,14 @@ public sealed class HistoryViewModelTests
 
         public int ClearCalls { get; private set; }
 
+        public Exception? LoadException { get; set; }
+
+        public Exception? ClearException { get; set; }
+
         public Task<IReadOnlyList<DownloadHistoryItem>> LoadAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<DownloadHistoryItem>>(items.ToArray());
+            LoadException is null
+                ? Task.FromResult<IReadOnlyList<DownloadHistoryItem>>(items.ToArray())
+                : Task.FromException<IReadOnlyList<DownloadHistoryItem>>(LoadException);
 
         public Task AddAsync(DownloadHistoryItem item, CancellationToken cancellationToken)
         {
@@ -234,6 +385,11 @@ public sealed class HistoryViewModelTests
         public Task ClearAsync(CancellationToken cancellationToken)
         {
             ClearCalls++;
+            if (ClearException is not null)
+            {
+                return Task.FromException(ClearException);
+            }
+
             items.Clear();
             return Task.CompletedTask;
         }
@@ -241,9 +397,13 @@ public sealed class HistoryViewModelTests
 
     private sealed class FakeQueueService : IDownloadQueueService
     {
+        public bool HasHistoryPersistenceError { get; set; }
+
         public IReadOnlyList<DownloadQueueItem> Items => [];
 
         public List<DownloadRequest> Enqueued { get; } = [];
+
+        public Exception? EnqueueException { get; set; }
 
         public event EventHandler? Changed;
 
@@ -251,6 +411,11 @@ public sealed class HistoryViewModelTests
 
         public Task EnqueueAsync(DownloadRequest request, CancellationToken cancellationToken)
         {
+            if (EnqueueException is not null)
+            {
+                return Task.FromException(EnqueueException);
+            }
+
             Enqueued.Add(request);
             return Task.CompletedTask;
         }

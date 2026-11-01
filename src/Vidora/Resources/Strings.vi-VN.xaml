@@ -47,6 +47,8 @@
     <system:String x:Key="History.Retry">Tải _lại</system:String>
     <system:String x:Key="History.ClearTitle">Xóa lịch sử</system:String>
     <system:String x:Key="History.ClearMessage">Xóa toàn bộ lịch sử tải xuống? Các file đã tải sẽ được giữ nguyên.</system:String>
+    <system:String x:Key="History.PersistenceFailed">Không thể đọc hoặc lưu lịch sử. Dữ liệu hiện có vẫn được giữ nguyên.</system:String>
+    <system:String x:Key="History.OperationFailed">Không thể thực hiện thao tác với file hoặc thư mục này.</system:String>
     <system:String x:Key="Quality.Best">Tốt nhất</system:String>
     <system:String x:Key="Quality.1080">1080p</system:String>
     <system:String x:Key="Quality.720">720p</system:String>

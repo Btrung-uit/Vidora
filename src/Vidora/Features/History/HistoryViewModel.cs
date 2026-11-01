@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -21,6 +22,12 @@ public partial class HistoryViewModel(
     [ObservableProperty]
     public partial IReadOnlyList<HistoryItemViewModel> Items { get; private set; } = [];
 
+    [ObservableProperty]
+    public partial bool HasPersistenceError { get; private set; }
+
+    [ObservableProperty]
+    public partial bool HasOperationError { get; private set; }
+
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         if (!subscribedToQueue)
@@ -29,7 +36,19 @@ public partial class HistoryViewModel(
             subscribedToQueue = true;
         }
 
-        await ReloadAsync(cancellationToken);
+        await TryReloadAsync(cancellationToken);
+        HasPersistenceError |= queueService.HasHistoryPersistenceError;
+    }
+
+    public void RefreshAvailability()
+    {
+        foreach (var item in Items)
+        {
+            item.RefreshAvailability();
+        }
+
+        OpenFileCommand.NotifyCanExecuteChanged();
+        OpenFolderCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanOpenFile))]
@@ -37,7 +56,7 @@ public partial class HistoryViewModel(
     {
         if (CanOpenFile(row))
         {
-            openPath(row!.Item.FinalPath!);
+            TryOpenPath(row!.Item.FinalPath!);
         }
     }
 
@@ -50,7 +69,7 @@ public partial class HistoryViewModel(
         var folder = GetExistingFolder(row);
         if (folder is not null)
         {
-            openPath(folder);
+            TryOpenPath(folder);
         }
     }
 
@@ -66,11 +85,11 @@ public partial class HistoryViewModel(
     }
 
     [RelayCommand]
-    private Task RetryAsync(HistoryItemViewModel? row, CancellationToken cancellationToken)
+    private async Task RetryAsync(HistoryItemViewModel? row, CancellationToken cancellationToken)
     {
         if (row is null)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         var item = row.Item;
@@ -90,7 +109,15 @@ public partial class HistoryViewModel(
             item.Quality,
             item.DestinationDirectory,
             timeProvider.GetUtcNow());
-        return queueService.EnqueueAsync(request, cancellationToken);
+        try
+        {
+            await queueService.EnqueueAsync(request, cancellationToken);
+            HasPersistenceError = queueService.HasHistoryPersistenceError;
+        }
+        catch (Exception exception) when (IsPersistenceException(exception))
+        {
+            HasPersistenceError = true;
+        }
     }
 
     [RelayCommand]
@@ -101,8 +128,16 @@ public partial class HistoryViewModel(
             return;
         }
 
-        await historyService.ClearAsync(cancellationToken);
-        Items = [];
+        try
+        {
+            await historyService.ClearAsync(cancellationToken);
+            Items = [];
+            HasPersistenceError = queueService.HasHistoryPersistenceError;
+        }
+        catch (Exception exception) when (IsPersistenceException(exception))
+        {
+            HasPersistenceError = true;
+        }
     }
 
     private static string? GetExistingFolder(HistoryItemViewModel? row)
@@ -135,20 +170,53 @@ public partial class HistoryViewModel(
         uiContext.Post(static state => ((HistoryViewModel)state!).ReloadFromQueue(), this);
     }
 
-    private async void ReloadFromQueue() => await ReloadAsync(CancellationToken.None);
-
-    private async Task ReloadAsync(CancellationToken cancellationToken)
+    private async void ReloadFromQueue()
     {
-        var items = await historyService.LoadAsync(cancellationToken);
-        Items = items.Select(static item => new HistoryItemViewModel(item)).ToArray();
+        await TryReloadAsync(CancellationToken.None);
+        HasPersistenceError |= queueService.HasHistoryPersistenceError;
     }
+
+    private async Task<bool> TryReloadAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var items = await historyService.LoadAsync(cancellationToken);
+            Items = items.Select(static item => new HistoryItemViewModel(item)).ToArray();
+            HasPersistenceError = false;
+            return true;
+        }
+        catch (Exception exception) when (IsPersistenceException(exception))
+        {
+            HasPersistenceError = true;
+            return false;
+        }
+    }
+
+    private void TryOpenPath(string path)
+    {
+        try
+        {
+            openPath(path);
+            HasOperationError = false;
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or Win32Exception)
+        {
+            HasOperationError = true;
+        }
+    }
+
+    private static bool IsPersistenceException(Exception exception) =>
+        exception is IOException or UnauthorizedAccessException;
 }
 
-public sealed class HistoryItemViewModel(DownloadHistoryItem item)
+public sealed class HistoryItemViewModel(DownloadHistoryItem item) : ObservableObject
 {
     public DownloadHistoryItem Item { get; } = item;
 
     public bool IsMissing =>
         Item.Status == DownloadStatus.Completed &&
         (string.IsNullOrWhiteSpace(Item.FinalPath) || !File.Exists(Item.FinalPath));
+
+    public void RefreshAvailability() => OnPropertyChanged(nameof(IsMissing));
 }

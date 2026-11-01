@@ -108,6 +108,63 @@ public sealed class HistoryServiceTests
     }
 
     [TestMethod]
+    [DataRow("relative", "mp4")]
+    [DataRow("https://youtu.be/abc123", null)]
+    public async Task LoadAsync_InvalidConsumerShape_QuarantinesHistory(
+        string sourceUrl,
+        string? extension)
+    {
+        using var directory = new TemporaryDirectory();
+        var path = Path.Combine(directory.Path, "history.json");
+        var document = new
+        {
+            schemaVersion = 1,
+            items = new[]
+            {
+                new
+                {
+                    taskId = "11111111-1111-1111-1111-111111111111",
+                    attemptCount = 1,
+                    timestamp = "2026-11-01T08:00:00Z",
+                    sourceUrl,
+                    mediaId = "abc123",
+                    title = "Video",
+                    platform = 1,
+                    formats = new[]
+                    {
+                        new
+                        {
+                            formatId = "18",
+                            extension,
+                            width = 1280,
+                            height = 720,
+                            videoCodec = "avc1",
+                            audioCodec = "mp4a",
+                            fileSize = 1_000
+                        }
+                    },
+                    quality = 2,
+                    destinationDirectory = @"C:\Videos",
+                    status = 2,
+                    finalPath = (string?)null,
+                    errorCode = (int?)null
+                }
+            }
+        };
+        await File.WriteAllTextAsync(
+            path,
+            JsonSerializer.Serialize(document, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+            CancellationToken.None);
+        var service = new HistoryService(path, TimeProvider.System);
+
+        var actual = await service.LoadAsync(CancellationToken.None);
+
+        Assert.IsEmpty(actual);
+        Assert.AreEqual(AtomicStoreLoadStatus.RecoveredCorrupt, service.LastLoadStatus);
+        Assert.HasCount(1, Directory.GetFiles(directory.Path, "history.json.corrupt-*"));
+    }
+
+    [TestMethod]
     public async Task AddAsync_SameAttemptAgain_ReplacesEarlierTerminalSnapshot()
     {
         using var directory = new TemporaryDirectory();

@@ -200,6 +200,8 @@ public sealed class DownloadViewModelQueueTests
 
     private sealed class FakeQueueService : IDownloadQueueService
     {
+        public bool HasHistoryPersistenceError => false;
+
         private readonly List<DownloadQueueItem> items = [];
 
         public IReadOnlyList<DownloadQueueItem> Items => items.ToArray();

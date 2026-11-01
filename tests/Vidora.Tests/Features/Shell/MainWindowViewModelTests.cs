@@ -145,6 +145,8 @@ public sealed class MainWindowViewModelTests
 
     private sealed class StubQueueService : IDownloadQueueService
     {
+        public bool HasHistoryPersistenceError => false;
+
         public IReadOnlyList<DownloadQueueItem> Items => [];
 
         public event EventHandler? Changed { add { } remove { } }
