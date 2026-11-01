@@ -9,6 +9,8 @@ namespace Vidora.Tests.Infrastructure.Processes;
 [TestClass]
 public sealed class DownloadQueueServiceTests
 {
+    private static readonly DateTimeOffset FinishedAt = new(2026, 11, 1, 10, 30, 0, TimeSpan.Zero);
+
     [TestMethod]
     public async Task EnqueueAsync_TwoItems_RunsFifoWithConcurrencyOne()
     {
@@ -194,6 +196,29 @@ public sealed class DownloadQueueServiceTests
     }
 
     [TestMethod]
+    public async Task EnqueueAsync_UrlCompletedInHistory_MarksDuplicateWarning()
+    {
+        using var context = new QueueTestContext();
+        var priorRequest = Request("14141414-1414-1414-1414-141414141414");
+        await context.History.AddAsync(
+            HistoryItem(priorRequest, DownloadStatus.Completed),
+            CancellationToken.None);
+        var completion = new TaskCompletionSource<DownloadResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = await context.CreateService((_, _, _) => completion.Task);
+        var request = Request("15151515-1515-1515-1515-151515151515") with
+        {
+            SourceUrl = priorRequest.SourceUrl,
+            Metadata = priorRequest.Metadata with { SourceUrl = priorRequest.SourceUrl }
+        };
+
+        await service.EnqueueAsync(request, CancellationToken.None);
+
+        Assert.IsTrue(service.Items.Single().HasDuplicateUrlWarning);
+        completion.SetResult(Completed(request));
+        await WaitUntilAsync(() => service.Items.Single().Status == DownloadStatus.Completed);
+    }
+
+    [TestMethod]
     public async Task InitializeAsync_RestoredPendingItem_DoesNotStartUntilResume()
     {
         using var context = new QueueTestContext();
@@ -236,6 +261,45 @@ public sealed class DownloadQueueServiceTests
 
         Assert.AreEqual(DownloadStatus.Interrupted, service.Items.Single().Status);
         Assert.AreEqual(DownloadStatus.Interrupted, restored.Single().Status);
+        var history = context.History.Items.Single();
+        Assert.AreEqual(DownloadStatus.Interrupted, history.Status);
+        Assert.AreEqual(request.Id, history.TaskId);
+        Assert.AreEqual(1, history.AttemptCount);
+        Assert.AreEqual(FinishedAt, history.Timestamp);
+    }
+
+    [TestMethod]
+    [DataRow(DownloadStatus.Completed)]
+    [DataRow(DownloadStatus.Failed)]
+    [DataRow(DownloadStatus.Cancelled)]
+    public async Task TerminalDownload_AddsOneHistorySnapshot(DownloadStatus status)
+    {
+        using var context = new QueueTestContext();
+        var request = Request("13131313-1313-1313-1313-131313131313");
+        var error = status == DownloadStatus.Completed
+            ? null
+            : new VidoraError(VidoraErrorCode.Unknown, "Error.DownloadFailed", "Action.TryAgain", "test", true);
+        var result = new DownloadResult(
+            status,
+            status == DownloadStatus.Completed ? Path.Combine(request.DestinationDirectory, "video.mp4") : null,
+            error);
+        var service = await context.CreateService((_, _, _) => Task.FromResult(result));
+
+        await service.EnqueueAsync(request, CancellationToken.None);
+        await WaitUntilAsync(() => context.History.Items.Count == 1);
+
+        var item = context.History.Items.Single();
+        Assert.AreEqual(request.Id, item.TaskId);
+        Assert.AreEqual(1, item.AttemptCount);
+        Assert.AreEqual(FinishedAt, item.Timestamp);
+        Assert.AreEqual(request.SourceUrl, item.SourceUrl);
+        Assert.AreEqual(request.Metadata.Title, item.Title);
+        Assert.AreEqual(request.Metadata.Platform, item.Platform);
+        Assert.AreEqual(request.Quality, item.Quality);
+        Assert.AreEqual(request.DestinationDirectory, item.DestinationDirectory);
+        Assert.AreEqual(status, item.Status);
+        Assert.AreEqual(result.FinalPath, item.FinalPath);
+        Assert.AreEqual(error?.Code, item.ErrorCode);
     }
 
     [TestMethod]
@@ -251,7 +315,9 @@ public sealed class DownloadQueueServiceTests
                 return Task.FromResult(Completed(request));
             }),
             store,
-            activeDownloads);
+            activeDownloads,
+            new RecordingHistoryService(),
+            new FixedTimeProvider(FinishedAt));
         await service.InitializeAsync(CancellationToken.None);
 
         await service.EnqueueAsync(
@@ -298,6 +364,21 @@ public sealed class DownloadQueueServiceTests
         null,
         new VidoraError(VidoraErrorCode.Unknown, "Error.DownloadFailed", "Action.TryAgain", "test", true));
 
+    private static DownloadHistoryItem HistoryItem(DownloadRequest request, DownloadStatus status) => new(
+        request.Id,
+        1,
+        FinishedAt,
+        request.SourceUrl,
+        request.Metadata.MediaId,
+        request.Metadata.Title,
+        request.Metadata.Platform,
+        request.Metadata.Formats,
+        request.Quality,
+        request.DestinationDirectory,
+        status,
+        null,
+        null);
+
     private static async Task<DownloadResult> WaitForCancellation(CancellationToken cancellationToken)
     {
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
@@ -319,10 +400,17 @@ public sealed class DownloadQueueServiceTests
 
         public QueueStore Store => new(Path.Combine(directory, "queue.json"), TimeProvider.System);
 
+        public RecordingHistoryService History { get; } = new();
+
         public async Task<DownloadQueueService> CreateService(
             Func<DownloadRequest, IProgress<DownloadProgress>, CancellationToken, Task<DownloadResult>> download)
         {
-            var service = new DownloadQueueService(new FakeDownloadService(download), Store, new ActiveDownloadCoordinator());
+            var service = new DownloadQueueService(
+                new FakeDownloadService(download),
+                Store,
+                new ActiveDownloadCoordinator(),
+                History,
+                new FixedTimeProvider(FinishedAt));
             await service.InitializeAsync(CancellationToken.None);
             return service;
         }
@@ -375,5 +463,52 @@ public sealed class DownloadQueueServiceTests
 
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class RecordingHistoryService : IHistoryService
+    {
+        private readonly object sync = new();
+        private readonly List<DownloadHistoryItem> items = [];
+
+        public IReadOnlyList<DownloadHistoryItem> Items
+        {
+            get
+            {
+                lock (sync)
+                {
+                    return items.ToArray();
+                }
+            }
+        }
+
+        public Task<IReadOnlyList<DownloadHistoryItem>> LoadAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(Items);
+
+        public Task AddAsync(DownloadHistoryItem item, CancellationToken cancellationToken)
+        {
+            lock (sync)
+            {
+                items.RemoveAll(existing =>
+                    existing.TaskId == item.TaskId && existing.AttemptCount == item.AttemptCount);
+                items.Add(item);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAsync(CancellationToken cancellationToken)
+        {
+            lock (sync)
+            {
+                items.Clear();
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }

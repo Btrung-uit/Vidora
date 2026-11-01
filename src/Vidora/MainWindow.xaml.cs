@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows;
 using Vidora.Core.Services;
 using Vidora.Features.Download;
+using Vidora.Features.History;
 using Vidora.Features.Settings;
 using Vidora.Features.Shell;
 
@@ -16,6 +17,7 @@ public partial class MainWindow : Window
     public MainWindow(
         MainWindowViewModel viewModel,
         DownloadViewModel downloadViewModel,
+        HistoryViewModel historyViewModel,
         SettingsViewModel settingsViewModel,
         IAppShutdownCoordinator shutdownCoordinator)
     {
@@ -23,6 +25,7 @@ public partial class MainWindow : Window
         this.shutdownCoordinator = shutdownCoordinator;
         DataContext = viewModel;
         DownloadContent.DataContext = downloadViewModel;
+        HistoryContent.DataContext = historyViewModel;
         SettingsContent.DataContext = settingsViewModel;
         Closing += Window_Closing;
     }

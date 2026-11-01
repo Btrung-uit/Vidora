@@ -9,7 +9,9 @@ namespace Vidora.Infrastructure.Processes;
 public sealed class DownloadQueueService(
     IDownloadService downloadService,
     IQueueStore queueStore,
-    IActiveDownloadCoordinator activeDownloads) : IDownloadQueueService
+    IActiveDownloadCoordinator activeDownloads,
+    IHistoryService historyService,
+    TimeProvider timeProvider) : IDownloadQueueService
 {
     private readonly object sync = new();
     private readonly SemaphoreSlim mutationGate = new(1, 1);
@@ -65,6 +67,7 @@ public sealed class DownloadQueueService(
         await mutationGate.WaitAsync(cancellationToken);
         try
         {
+            var history = await historyService.LoadAsync(cancellationToken);
             DownloadQueueItem queued;
             lock (sync)
             {
@@ -77,7 +80,9 @@ public sealed class DownloadQueueService(
                     null,
                     null,
                     0,
-                    items.Any(item => item.Request.SourceUrl == snapshot.SourceUrl));
+                    items.Any(item => item.Request.SourceUrl == snapshot.SourceUrl) ||
+                    history.Any(item =>
+                        item.Status == DownloadStatus.Completed && item.SourceUrl == snapshot.SourceUrl));
                 items.Add(queued);
             }
 
@@ -155,6 +160,7 @@ public sealed class DownloadQueueService(
         DownloadResult result,
         CancellationToken cancellationToken)
     {
+        DownloadQueueItem? interrupted = null;
         await mutationGate.WaitAsync(cancellationToken);
         try
         {
@@ -173,10 +179,12 @@ public sealed class DownloadQueueService(
                     FinalPath = result.FinalPath,
                     Error = result.Error
                 };
+                interrupted = items[index];
                 paused = true;
             }
 
             await SaveCurrentAsync(cancellationToken);
+            await historyService.AddAsync(ToHistoryItem(interrupted), cancellationToken);
         }
         finally
         {
@@ -208,6 +216,7 @@ public sealed class DownloadQueueService(
             {
                 DownloadQueueItem active;
                 CancellationTokenSource cancellation;
+                DownloadQueueItem? terminal = null;
                 await mutationGate.WaitAsync();
                 try
                 {
@@ -275,6 +284,7 @@ public sealed class DownloadQueueService(
                                 FinalPath = result.FinalPath,
                                 Error = result.Error
                             };
+                            terminal = items[index];
                         }
 
                         if (result.Status is DownloadStatus.Cancelled or DownloadStatus.Failed or DownloadStatus.Interrupted)
@@ -284,6 +294,11 @@ public sealed class DownloadQueueService(
                     }
 
                     await SaveCurrentAsync(CancellationToken.None);
+                    if (terminal is not null)
+                    {
+                        await historyService.AddAsync(ToHistoryItem(terminal), CancellationToken.None);
+                    }
+
                     lock (sync)
                     {
                         activeCancellation = null;
@@ -372,6 +387,21 @@ public sealed class DownloadQueueService(
     {
         Metadata = request.Metadata with { Formats = request.Metadata.Formats.ToArray() }
     };
+
+    private DownloadHistoryItem ToHistoryItem(DownloadQueueItem item) => new(
+        item.Request.Id,
+        item.AttemptCount,
+        timeProvider.GetUtcNow(),
+        item.Request.SourceUrl,
+        item.Request.Metadata.MediaId,
+        item.Request.Metadata.Title,
+        item.Request.Metadata.Platform,
+        item.Request.Metadata.Formats.ToArray(),
+        item.Request.Quality,
+        item.Request.DestinationDirectory,
+        item.Status,
+        item.FinalPath,
+        item.Error?.Code);
 
     private void EnsureInitialized()
     {

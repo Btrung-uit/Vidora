@@ -3,6 +3,7 @@ using System.Windows.Threading;
 using Vidora.Core.Models;
 using Vidora.Core.Services;
 using Vidora.Features.Download;
+using Vidora.Features.History;
 using Vidora.Features.Settings;
 using Vidora.Features.Shell;
 
@@ -70,6 +71,13 @@ public sealed class MainWindowViewModelTests
 
         var shellViewModel = new MainWindowViewModel();
         var settingsViewModel = new SettingsViewModel(new StubDependencyService());
+        var historyViewModel = new HistoryViewModel(
+            new StubHistoryService(),
+            new StubQueueService(),
+            _ => { },
+            _ => { },
+            () => true,
+            TimeProvider.System);
         var shutdown = new StubShutdownCoordinator(AppShutdownOutcome.ContinueRunning);
         var window = new MainWindow(
             shellViewModel,
@@ -78,12 +86,21 @@ public sealed class MainWindowViewModelTests
                 new StubQueueService(),
                 new StubSettingsService(),
                 TimeProvider.System),
+            historyViewModel,
             settingsViewModel,
             shutdown);
 
         try
         {
             window.Show();
+            shellViewModel.NavigateCommand.Execute(ShellPage.History);
+            window.UpdateLayout();
+
+            var historyView = LogicalTreeHelper.FindLogicalNode(window, "HistoryContent") as HistoryView;
+            Assert.IsNotNull(historyView);
+            Assert.AreEqual(Visibility.Visible, historyView.Visibility);
+            Assert.AreEqual(historyViewModel, historyView.DataContext);
+
             shellViewModel.NavigateCommand.Execute(ShellPage.Settings);
             window.UpdateLayout();
 
@@ -152,6 +169,16 @@ public sealed class MainWindowViewModelTests
             Task.FromResult(new AppSettings(null));
 
         public Task SaveAsync(AppSettings settings, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class StubHistoryService : IHistoryService
+    {
+        public Task<IReadOnlyList<DownloadHistoryItem>> LoadAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<DownloadHistoryItem>>([]);
+
+        public Task AddAsync(DownloadHistoryItem item, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task ClearAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class StubShutdownCoordinator(AppShutdownOutcome outcome) : IAppShutdownCoordinator
