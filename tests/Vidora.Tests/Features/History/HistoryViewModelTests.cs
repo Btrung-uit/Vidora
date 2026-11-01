@@ -113,6 +113,49 @@ public sealed class HistoryViewModelTests
     }
 
     [TestMethod]
+    public async Task CopyDiagnosticCommand_FailedItem_CopiesOnlyStableFields()
+    {
+        var copied = new List<string>();
+        var failed = Item() with
+        {
+            Status = DownloadStatus.Failed,
+            ErrorCode = VidoraErrorCode.NetworkFailure,
+            DestinationDirectory = @"C:\Users\acer\Videos"
+        };
+        var viewModel = CreateViewModel(
+            history: new FakeHistoryService([failed]),
+            copyText: copied.Add);
+        await viewModel.InitializeAsync(CancellationToken.None);
+        var row = viewModel.Items.Single();
+
+        Assert.IsTrue(viewModel.CopyDiagnosticCommand.CanExecute(row));
+        viewModel.CopyDiagnosticCommand.Execute(row);
+
+        var diagnostic = copied.Single();
+        StringAssert.Contains(diagnostic, failed.TaskId.ToString("D"));
+        StringAssert.Contains(diagnostic, "Attempt: 1");
+        StringAssert.Contains(diagnostic, "Status: Failed");
+        StringAssert.Contains(diagnostic, "ErrorCode: NetworkFailure");
+        Assert.IsFalse(diagnostic.Contains("Users", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(diagnostic.Contains("youtu", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public async Task CopyDiagnosticCommand_CompletedItemOrClipboardFailure_IsSafe()
+    {
+        var completed = CreateViewModel(copyText: _ => throw new InvalidOperationException("Clipboard busy."));
+        await completed.InitializeAsync(CancellationToken.None);
+        Assert.IsFalse(completed.CopyDiagnosticCommand.CanExecute(completed.Items.Single()));
+
+        var failedItem = Item() with { Status = DownloadStatus.Failed, ErrorCode = VidoraErrorCode.Unknown };
+        var failed = CreateViewModel(
+            history: new FakeHistoryService([failedItem]),
+            copyText: _ => throw new InvalidOperationException("Clipboard busy."));
+        await failed.InitializeAsync(CancellationToken.None);
+        failed.CopyDiagnosticCommand.Execute(failed.Items.Single());
+    }
+
+    [TestMethod]
     public async Task RetryCommand_Item_EnqueuesNewRequestWithCapturedDownloadInputs()
     {
         var queue = new FakeQueueService();
@@ -281,6 +324,12 @@ public sealed class HistoryViewModelTests
         Assert.IsNotNull(clear);
         Assert.AreEqual(view.FindResource("History.Clear"), clear.Content);
         Assert.AreEqual(viewModel.ClearCommand, clear.Command);
+        var presenter = list.ItemContainerGenerator.ContainerFromIndex(0) as ContentPresenter;
+        Assert.IsNotNull(presenter);
+        var copyDiagnostic = list.ItemTemplate.FindName("CopyHistoryDiagnosticButton", presenter) as Button;
+        Assert.IsNotNull(copyDiagnostic);
+        Assert.AreEqual(viewModel.CopyDiagnosticCommand, copyDiagnostic.Command);
+        Assert.AreEqual(view.FindResource("Diagnostics.Copy"), copyDiagnostic.Content);
     }
 
     [STATestMethod]

@@ -185,6 +185,24 @@
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
+                            <Button x:Name="CopyDownloadDiagnosticButton"
+                                    Margin="0,8,0,0"
+                                    Padding="10,4"
+                                    HorizontalAlignment="Left"
+                                    Command="{Binding CopyDiagnosticCommand}"
+                                    CommandParameter="{Binding DownloadError}"
+                                    Content="{DynamicResource Diagnostics.Copy}">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding LastDownloadStatus}" Value="{x:Static models:DownloadStatus.Failed}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </StackPanel>
                     </StackPanel>
                 </Grid>
@@ -202,6 +220,13 @@
                     </Style>
                 </StackPanel.Style>
                 <TextBlock Text="{DynamicResource Download.DiscoveryFailed}" />
+                <Button x:Name="CopyDiscoveryDiagnosticButton"
+                        Margin="0,8,0,0"
+                        Padding="10,4"
+                        HorizontalAlignment="Center"
+                        Command="{Binding CopyDiagnosticCommand}"
+                        CommandParameter="{Binding Error}"
+                        Content="{DynamicResource Diagnostics.Copy}" />
             </StackPanel>
         </Grid>
 

@@ -97,6 +97,13 @@ public sealed class DownloadViewModelDownloadTests
             var status = (TextBlock)view.FindName("DownloadStatusText");
             Assert.AreEqual(Visibility.Visible, panel.Visibility);
             Assert.AreEqual(view.FindResource(expectedResourceKey), status.Text);
+            if (terminalStatus == DownloadStatus.Failed)
+            {
+                var copy = (Button)view.FindName("CopyDownloadDiagnosticButton");
+                Assert.AreEqual(viewModel.CopyDiagnosticCommand, copy.Command);
+                Assert.AreSame(viewModel.DownloadError, copy.CommandParameter);
+                Assert.AreEqual(view.FindResource("Diagnostics.Copy"), copy.Content);
+            }
         }
     }
 

@@ -67,7 +67,8 @@ public partial class App : Application
             discoveryService,
             queueService,
             settingsService,
-            TimeProvider.System);
+            TimeProvider.System,
+            copyText: Clipboard.SetText);
         await downloadViewModel.InitializeAsync(CancellationToken.None);
         var historyViewModel = new HistoryViewModel(
             historyService,

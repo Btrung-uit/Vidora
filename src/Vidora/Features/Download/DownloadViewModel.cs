@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Vidora.Core.Errors;
 using Vidora.Core.Models;
 using Vidora.Core.Services;
+using Vidora.Infrastructure.Logging;
 
 namespace Vidora.Features.Download;
 
@@ -22,6 +23,7 @@ public partial class DownloadViewModel : ObservableObject
     private readonly IDownloadQueueService queueService;
     private readonly ISettingsService settingsService;
     private readonly TimeProvider timeProvider;
+    private readonly Action<string> copyText;
     private readonly SynchronizationContext? uiContext;
     private CancellationTokenSource? activeDiscovery;
 
@@ -30,12 +32,14 @@ public partial class DownloadViewModel : ObservableObject
         IDownloadQueueService queueService,
         ISettingsService settingsService,
         TimeProvider timeProvider,
-        SynchronizationContext? uiContext = null)
+        SynchronizationContext? uiContext = null,
+        Action<string>? copyText = null)
     {
         this.discoveryService = discoveryService;
         this.queueService = queueService;
         this.settingsService = settingsService;
         this.timeProvider = timeProvider;
+        this.copyText = copyText ?? (_ => { });
         this.uiContext = uiContext ?? SynchronizationContext.Current;
         queueService.Changed += QueueService_Changed;
         RefreshQueueProjection();
@@ -52,6 +56,7 @@ public partial class DownloadViewModel : ObservableObject
     public partial VideoMetadata? Metadata { get; private set; }
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CopyDiagnosticCommand))]
     public partial VidoraError? Error { get; private set; }
 
     [ObservableProperty]
@@ -73,6 +78,7 @@ public partial class DownloadViewModel : ObservableObject
     public partial DownloadResult? DownloadResult { get; private set; }
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CopyDiagnosticCommand))]
     public partial VidoraError? DownloadError { get; private set; }
 
     [ObservableProperty]
@@ -152,6 +158,33 @@ public partial class DownloadViewModel : ObservableObject
 
     [RelayCommand]
     private void CancelDiscovery() => Volatile.Read(ref activeDiscovery)?.Cancel();
+
+    private static bool CanCopyDiagnostic(VidoraError? error) => error is not null;
+
+    [RelayCommand(CanExecute = nameof(CanCopyDiagnostic))]
+    private void CopyDiagnostic(VidoraError? error)
+    {
+        if (error is null)
+        {
+            return;
+        }
+
+        var diagnostic = string.Join(
+            Environment.NewLine,
+            $"Code: {error.Code}",
+            $"MessageKey: {error.UserMessageKey}",
+            $"ActionKey: {error.SuggestedActionKey}",
+            $"Retryable: {error.IsRetryable}",
+            "Detail:",
+            DiagnosticRedactor.Redact(error.TechnicalDetail));
+        try
+        {
+            copyText(diagnostic);
+        }
+        catch (Exception)
+        {
+        }
+    }
 
     private bool CanStartDownload() =>
         Metadata is not null &&
