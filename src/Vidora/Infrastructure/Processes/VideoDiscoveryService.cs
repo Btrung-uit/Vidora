@@ -19,6 +19,28 @@ public sealed class VideoDiscoveryService(
     public async Task<VideoMetadata> DiscoverAsync(string url, CancellationToken cancellationToken)
     {
         var operationId = Guid.NewGuid();
+        try
+        {
+            return await DiscoverCoreAsync(url, cancellationToken);
+        }
+        catch (VidoraException exception)
+        {
+            await LogAsync(operationId, "DiscoveryFailed", exception.Error);
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            var error = YtDlpErrorClassifier.Classify(
+                new ProcessResult(-1, [], []),
+                YtDlpOperation.Discovery,
+                wasCancelled: true);
+            await LogAsync(operationId, "DiscoveryCancelled", error, FileLogLevel.Warning);
+            throw;
+        }
+    }
+
+    private async Task<VideoMetadata> DiscoverCoreAsync(string url, CancellationToken cancellationToken)
+    {
         SupportedUrlValidator.Validate(url);
         var dependencies = await dependencyService.CheckAsync(cancellationToken);
         if (!dependencies.IsReady)
@@ -45,17 +67,7 @@ public sealed class VideoDiscoveryService(
                 "Action.TryAgain",
                 "Metadata discovery exceeded the 30-second timeout.",
                 true);
-            await LogAsync(operationId, "DiscoveryFailed", error);
             throw new VidoraException(error);
-        }
-        catch (OperationCanceledException)
-        {
-            var error = YtDlpErrorClassifier.Classify(
-                new ProcessResult(-1, [], []),
-                YtDlpOperation.Discovery,
-                wasCancelled: true);
-            await LogAsync(operationId, "DiscoveryCancelled", error, FileLogLevel.Warning);
-            throw;
         }
         catch (Exception exception) when (
             exception is Win32Exception or IOException or InvalidOperationException)
@@ -66,14 +78,12 @@ public sealed class VideoDiscoveryService(
                 "Action.OpenSettings",
                 DiagnosticRedactor.Redact(exception.Message),
                 false);
-            await LogAsync(operationId, "DiscoveryFailed", error);
             throw new VidoraException(error);
         }
 
         if (result.ExitCode != 0)
         {
             var error = YtDlpErrorClassifier.Classify(result, YtDlpOperation.Discovery);
-            await LogAsync(operationId, "DiscoveryFailed", error);
             throw new VidoraException(error);
         }
 

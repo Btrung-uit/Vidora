@@ -118,11 +118,20 @@ public sealed class FileLoggerTests
     {
         using var directory = new TemporaryDirectory();
         var logger = CreateLogger(directory.Path);
+        var detail = new string('x', 100_000);
 
         await Task.WhenAll(Enumerable.Range(1, 50).Select(index =>
-            logger.WriteAsync(Entry($"event-{index}", "detail"), CancellationToken.None)));
+            logger.WriteAsync(Entry($"event-{index}", detail), CancellationToken.None)));
 
-        var lines = await File.ReadAllLinesAsync(Path.Combine(directory.Path, "vidora.log"));
+        var files = Directory.GetFiles(directory.Path, "vidora*.log");
+        Assert.IsLessThanOrEqualTo(5, files.Length);
+        var lines = new List<string>();
+        foreach (var file in files)
+        {
+            Assert.IsLessThanOrEqualTo(MaxFileBytes, new FileInfo(file).Length);
+            lines.AddRange(await File.ReadAllLinesAsync(file));
+        }
+
         Assert.HasCount(50, lines);
         var events = lines.Select(line =>
         {

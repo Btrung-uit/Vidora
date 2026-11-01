@@ -156,6 +156,25 @@ public sealed class YtDlpDiscoveryParserTests
     }
 
     [TestMethod]
+    public async Task DiscoverAsync_InvalidUrl_LogsStableValidationFailure()
+    {
+        var logger = new CapturedLogger();
+        var runner = new FakeProcessRunner((_, _) =>
+            throw new AssertFailedException("Invalid URL must not start the process."));
+        var service = new VideoDiscoveryService(
+            runner,
+            new FakeDependencyService(ReadyReport()),
+            new AppToolPaths("yt-dlp.exe", "ffmpeg.exe"),
+            logger);
+
+        var exception = await Assert.ThrowsAsync<VidoraException>(
+            () => service.DiscoverAsync("not-a-url", CancellationToken.None));
+
+        Assert.AreEqual(VidoraErrorCode.InvalidUrl, exception.Error.Code);
+        Assert.AreEqual(VidoraErrorCode.InvalidUrl, logger.Entries.Single().ErrorCode);
+    }
+
+    [TestMethod]
     public async Task DiscoverAsync_NonZeroExit_ClassifiesAndLogsRedactedFailure()
     {
         var logger = new CapturedLogger();

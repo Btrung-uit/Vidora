@@ -62,6 +62,7 @@ public sealed class DownloadServiceTests
     public async Task DownloadAsync_SuccessWithoutExistingFinalPath_ThrowsPostProcessingError()
     {
         using var directory = new TemporaryDirectory();
+        var logger = new CapturedLogger();
         var missing = Path.Combine(directory.Path, "missing.mp4");
         var runner = new FakeProcessRunner((_, output, _) =>
         {
@@ -70,9 +71,10 @@ public sealed class DownloadServiceTests
         });
 
         var exception = await Assert.ThrowsAsync<VidoraException>(
-            () => CreateService(runner, directory.Path).DownloadAsync(Request(directory.Path), new CapturedProgress(), CancellationToken.None));
+            () => CreateService(runner, directory.Path, logger: logger).DownloadAsync(Request(directory.Path), new CapturedProgress(), CancellationToken.None));
 
         Assert.AreEqual(VidoraErrorCode.PostProcessingFailure, exception.Error.Code);
+        Assert.AreEqual(VidoraErrorCode.PostProcessingFailure, logger.Entries.Single().ErrorCode);
     }
 
     [TestMethod]

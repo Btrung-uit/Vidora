@@ -1,6 +1,8 @@
 using System.IO;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using Microsoft.Win32;
 
 namespace Vidora.Features.Download;
@@ -28,4 +30,13 @@ public partial class DownloadView : UserControl
             viewModel.DestinationDirectory = dialog.FolderName;
         }
     }
+}
+
+public sealed class ResourceKeyConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is string key ? Application.Current?.TryFindResource(key) ?? key : string.Empty;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
 }

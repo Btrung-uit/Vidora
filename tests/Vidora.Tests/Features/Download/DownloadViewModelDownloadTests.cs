@@ -74,6 +74,12 @@ public sealed class DownloadViewModelDownloadTests
     [DoNotParallelize]
     public void DownloadView_TerminalStates_ShowLocalizedResults()
     {
+        if (Application.Current is null)
+        {
+            var application = new App();
+            application.InitializeComponent();
+        }
+
         foreach (var (terminalStatus, expectedResourceKey) in new[]
         {
             (DownloadStatus.Completed, "Download.Status.Completed"),
@@ -96,7 +102,10 @@ public sealed class DownloadViewModelDownloadTests
             var panel = (StackPanel)view.FindName("DownloadResultPanel");
             var status = (TextBlock)view.FindName("DownloadStatusText");
             Assert.AreEqual(Visibility.Visible, panel.Visibility);
-            Assert.AreEqual(view.FindResource(expectedResourceKey), status.Text);
+            var expectedStatusKey = terminalStatus == DownloadStatus.Failed
+                ? "Error.DownloadFailed"
+                : expectedResourceKey;
+            Assert.AreEqual(view.FindResource(expectedStatusKey), status.Text);
             if (terminalStatus == DownloadStatus.Failed)
             {
                 var copy = (Button)view.FindName("CopyDownloadDiagnosticButton");

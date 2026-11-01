@@ -152,6 +152,12 @@ public sealed class DownloadViewModelDiscoveryTests
     [DoNotParallelize]
     public void DownloadView_DiscoveryFailure_BindsLocalizedDiagnosticButton()
     {
+        if (Application.Current is null)
+        {
+            var application = new App();
+            application.InitializeComponent();
+        }
+
         var error = new VidoraError(
             VidoraErrorCode.Unknown,
             "Error.DiscoveryFailed",
@@ -172,9 +178,29 @@ public sealed class DownloadViewModelDiscoveryTests
         view.UpdateLayout();
 
         var button = (Button)view.FindName("CopyDiscoveryDiagnosticButton");
+        var messages = FindVisualChildren<TextBlock>(view).Select(text => text.Text).ToArray();
+        CollectionAssert.Contains(messages, view.FindResource("Error.DiscoveryFailed"));
+        CollectionAssert.Contains(messages, view.FindResource("Action.TryAgain"));
         Assert.AreEqual(viewModel.CopyDiagnosticCommand, button.Command);
         Assert.AreSame(error, button.CommandParameter);
         Assert.AreEqual(view.FindResource("Diagnostics.Copy"), button.Content);
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var index = 0; index < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, index);
+            if (child is T match)
+            {
+                yield return match;
+            }
+
+            foreach (var descendant in FindVisualChildren<T>(child))
+            {
+                yield return descendant;
+            }
+        }
     }
 
     private static VideoMetadata Metadata(string id) => new(

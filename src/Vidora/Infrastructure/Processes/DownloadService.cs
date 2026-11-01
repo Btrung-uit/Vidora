@@ -20,6 +20,31 @@ public sealed class DownloadService(
         IProgress<DownloadProgress> progress,
         CancellationToken cancellationToken)
     {
+        try
+        {
+            return await DownloadCoreAsync(request, progress, cancellationToken);
+        }
+        catch (VidoraException exception)
+        {
+            await LogAsync(request.Id, "DownloadFailed", exception.Error);
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            var error = YtDlpErrorClassifier.Classify(
+                new ProcessResult(-1, [], []),
+                YtDlpOperation.Download,
+                wasCancelled: true);
+            await LogAsync(request.Id, "DownloadCancelled", error, FileLogLevel.Warning);
+            throw;
+        }
+    }
+
+    private async Task<DownloadResult> DownloadCoreAsync(
+        DownloadRequest request,
+        IProgress<DownloadProgress> progress,
+        CancellationToken cancellationToken)
+    {
         var destination = DestinationValidator.Validate(request.DestinationDirectory);
         var baseName = OutputNamePolicy.CreateAvailableBaseName(
             destination,
@@ -42,7 +67,6 @@ public sealed class DownloadService(
                 "Action.TryAgain",
                 DiagnosticRedactor.Redact(exception.Message),
                 true);
-            await LogAsync(request.Id, "DownloadFailed", error);
             throw new VidoraException(error);
         }
 
@@ -77,15 +101,6 @@ public sealed class DownloadService(
                     output,
                     cancellationToken);
             }
-            catch (OperationCanceledException)
-            {
-                var error = YtDlpErrorClassifier.Classify(
-                    new ProcessResult(-1, [], []),
-                    YtDlpOperation.Download,
-                    wasCancelled: true);
-                await LogAsync(request.Id, "DownloadCancelled", error, FileLogLevel.Warning);
-                throw;
-            }
             catch (Exception exception) when (
                 exception is Win32Exception or IOException or InvalidOperationException)
             {
@@ -95,14 +110,12 @@ public sealed class DownloadService(
                     "Action.OpenSettings",
                     DiagnosticRedactor.Redact(exception.Message),
                     false);
-                await LogAsync(request.Id, "DownloadFailed", error);
                 throw new VidoraException(error);
             }
 
             if (processResult.ExitCode != 0)
             {
                 var error = YtDlpErrorClassifier.Classify(processResult, YtDlpOperation.Download);
-                await LogAsync(request.Id, "DownloadFailed", error);
                 throw new VidoraException(error);
             }
 
