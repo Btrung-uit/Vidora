@@ -53,7 +53,7 @@ At every milestone boundary:
 
 ---
 
-### Milestone 1: Diagnostic redaction
+### Task 1: Milestone 1 — Diagnostic redaction
 
 **Files:**
 - Create: `src/Vidora/Infrastructure/Logging/DiagnosticRedactor.cs`
@@ -72,7 +72,7 @@ At every milestone boundary:
 
 ---
 
-### Milestone 2: Stable yt-dlp error classification
+### Task 2: Milestone 2 — Stable yt-dlp error classification
 
 **Files:**
 - Create: `src/Vidora/Infrastructure/Processes/YtDlpErrorClassifier.cs`
@@ -93,7 +93,7 @@ At every milestone boundary:
 
 ---
 
-### Milestone 3: Rolling file logger
+### Task 3: Milestone 3 — Rolling file logger
 
 **Files:**
 - Create: `src/Vidora/Infrastructure/Logging/FileLogger.cs`
@@ -113,7 +113,7 @@ At every milestone boundary:
 
 ---
 
-### Milestone 4: Discovery and download service integration
+### Task 4: Milestone 4 — Discovery and download service integration
 
 **Files:**
 - Modify: `src/Vidora/Infrastructure/Processes/VideoDiscoveryService.cs`
@@ -136,7 +136,7 @@ At every milestone boundary:
 
 ---
 
-### Milestone 5: Copy-diagnostic UX and application composition
+### Task 5: Milestone 5 — Copy-diagnostic UX and application composition
 
 **Files:**
 - Modify: `src/Vidora/Features/Download/DownloadViewModel.cs`
@@ -164,7 +164,7 @@ At every milestone boundary:
 
 ---
 
-### Milestone 6: Final verification and review
+### Task 6: Milestone 6 — Final verification and review
 
 **Files:**
 - Modify only files required to fix accepted review findings.
