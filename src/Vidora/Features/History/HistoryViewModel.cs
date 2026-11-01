@@ -84,6 +84,34 @@ public partial class HistoryViewModel(
         }
     }
 
+    private static bool CanCopyDiagnostic(HistoryItemViewModel? row) =>
+        row?.Item.Status == DownloadStatus.Failed && row.Item.ErrorCode is not null;
+
+    [RelayCommand(CanExecute = nameof(CanCopyDiagnostic))]
+    private void CopyDiagnostic(HistoryItemViewModel? row)
+    {
+        if (!CanCopyDiagnostic(row))
+        {
+            return;
+        }
+
+        var item = row!.Item;
+        var diagnostic = string.Join(
+            Environment.NewLine,
+            $"TaskId: {item.TaskId:D}",
+            $"Attempt: {item.AttemptCount}",
+            $"Timestamp: {item.Timestamp:O}",
+            $"Status: {item.Status}",
+            $"ErrorCode: {item.ErrorCode}");
+        try
+        {
+            copyText(diagnostic);
+        }
+        catch (Exception)
+        {
+        }
+    }
+
     [RelayCommand]
     private async Task RetryAsync(HistoryItemViewModel? row, CancellationToken cancellationToken)
     {

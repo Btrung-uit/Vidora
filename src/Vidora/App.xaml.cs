@@ -8,6 +8,7 @@ using Vidora.Features.Settings;
 using Vidora.Features.Shell;
 using Vidora.Infrastructure.Dependencies;
 using Vidora.Infrastructure.Files;
+using Vidora.Infrastructure.Logging;
 using Vidora.Infrastructure.Persistence;
 using Vidora.Infrastructure.Processes;
 
@@ -21,20 +22,27 @@ public partial class App : Application
 
         IProcessRunner processRunner = new ProcessRunner();
         var toolPaths = AppToolPaths.CreateDefault();
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        IAppLogger logger = new FileLogger(Path.Combine(localAppData, "Vidora", "logs"), TimeProvider.System);
         IDependencyService dependencyService = new DependencyService(
             processRunner,
             toolPaths);
         IVideoDiscoveryService discoveryService = new VideoDiscoveryService(
             processRunner,
             dependencyService,
-            toolPaths);
+            toolPaths,
+            logger);
         var taskWorkspaceService = new TaskWorkspaceService(
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Vidora",
                 "temp"),
             new WindowsCanonicalPathResolver());
-        IDownloadService downloadService = new DownloadService(processRunner, toolPaths, taskWorkspaceService);
+        IDownloadService downloadService = new DownloadService(
+            processRunner,
+            toolPaths,
+            taskWorkspaceService,
+            logger);
         IActiveDownloadCoordinator activeDownloads = new ActiveDownloadCoordinator();
         var dataDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -59,7 +67,8 @@ public partial class App : Application
             discoveryService,
             queueService,
             settingsService,
-            TimeProvider.System);
+            TimeProvider.System,
+            copyText: Clipboard.SetText);
         await downloadViewModel.InitializeAsync(CancellationToken.None);
         var historyViewModel = new HistoryViewModel(
             historyService,

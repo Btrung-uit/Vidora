@@ -154,6 +154,12 @@
                                                 Command="{Binding DataContext.CopyUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}"
                                                 Content="{DynamicResource History.CopyUrl}" />
+                                        <Button x:Name="CopyHistoryDiagnosticButton"
+                                                Margin="0,0,8,0"
+                                                Padding="10,4"
+                                                Command="{Binding DataContext.CopyDiagnosticCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                Content="{DynamicResource Diagnostics.Copy}" />
                                         <Button Padding="10,4"
                                                 Command="{Binding DataContext.RetryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}"

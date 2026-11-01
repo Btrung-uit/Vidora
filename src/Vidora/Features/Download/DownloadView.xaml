@@ -8,6 +8,9 @@
              d:DesignHeight="520"
              d:DesignWidth="700"
              mc:Ignorable="d">
+    <UserControl.Resources>
+        <download:ResourceKeyConverter x:Key="ResourceKeyConverter" />
+    </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -152,20 +155,22 @@
                                             <DataTrigger Binding="{Binding LastDownloadStatus}" Value="{x:Static models:DownloadStatus.Cancelled}">
                                                 <Setter Property="Text" Value="{DynamicResource Download.Status.Cancelled}" />
                                             </DataTrigger>
-                                            <DataTrigger Binding="{Binding DownloadError.UserMessageKey}" Value="Error.QualityUnavailable">
-                                                <Setter Property="Text" Value="{DynamicResource Error.QualityUnavailable}" />
+                                            <DataTrigger Binding="{Binding LastDownloadStatus}" Value="{x:Static models:DownloadStatus.Failed}">
+                                                <Setter Property="Text" Value="{Binding DownloadError.UserMessageKey, Converter={StaticResource ResourceKeyConverter}}" />
                                             </DataTrigger>
-                                            <DataTrigger Binding="{Binding DownloadError.UserMessageKey}" Value="Error.DestinationUnavailable">
-                                                <Setter Property="Text" Value="{DynamicResource Error.DestinationUnavailable}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding DownloadError.UserMessageKey}" Value="Error.DependencyInvalid">
-                                                <Setter Property="Text" Value="{DynamicResource Error.DependencyInvalid}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding DownloadError.UserMessageKey}" Value="Error.FinalOutputMissing">
-                                                <Setter Property="Text" Value="{DynamicResource Error.FinalOutputMissing}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding DownloadError.UserMessageKey}" Value="Error.OutputOutsideDestination">
-                                                <Setter Property="Text" Value="{DynamicResource Error.OutputOutsideDestination}" />
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Margin="0,4,0,0"
+                                       Text="{Binding DownloadError.SuggestedActionKey, Converter={StaticResource ResourceKeyConverter}}"
+                                       TextWrapping="Wrap">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding LastDownloadStatus}" Value="{x:Static models:DownloadStatus.Failed}">
+                                                <Setter Property="Visibility" Value="Visible" />
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -185,6 +190,24 @@
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
+                            <Button x:Name="CopyDownloadDiagnosticButton"
+                                    Margin="0,8,0,0"
+                                    Padding="10,4"
+                                    HorizontalAlignment="Left"
+                                    Command="{Binding CopyDiagnosticCommand}"
+                                    CommandParameter="{Binding DownloadError}"
+                                    Content="{DynamicResource Diagnostics.Copy}">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding LastDownloadStatus}" Value="{x:Static models:DownloadStatus.Failed}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </StackPanel>
                     </StackPanel>
                 </Grid>
@@ -201,7 +224,16 @@
                         </Style.Triggers>
                     </Style>
                 </StackPanel.Style>
-                <TextBlock Text="{DynamicResource Download.DiscoveryFailed}" />
+                <TextBlock Text="{Binding Error.UserMessageKey, Converter={StaticResource ResourceKeyConverter}}" />
+                <TextBlock Margin="0,4,0,0"
+                           Text="{Binding Error.SuggestedActionKey, Converter={StaticResource ResourceKeyConverter}}" />
+                <Button x:Name="CopyDiscoveryDiagnosticButton"
+                        Margin="0,8,0,0"
+                        Padding="10,4"
+                        HorizontalAlignment="Center"
+                        Command="{Binding CopyDiagnosticCommand}"
+                        CommandParameter="{Binding Error}"
+                        Content="{DynamicResource Diagnostics.Copy}" />
             </StackPanel>
         </Grid>
 
