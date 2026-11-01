@@ -3,6 +3,7 @@ using Vidora.Core.Errors;
 using Vidora.Core.Models;
 using Vidora.Infrastructure.Dependencies;
 using Vidora.Infrastructure.Files;
+using Vidora.Infrastructure.Logging;
 using Vidora.Infrastructure.Processes;
 
 namespace Vidora.Tests.Infrastructure.Processes;
@@ -236,8 +237,9 @@ public sealed class DownloadServiceTests
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
             throw new AssertFailedException("Cancellation should stop the process.");
         });
+        var logger = new CapturedLogger();
         using var cancellation = new CancellationTokenSource();
-        var download = CreateService(runner, directory.Path).DownloadAsync(
+        var download = CreateService(runner, directory.Path, logger: logger).DownloadAsync(
             request,
             new CapturedProgress(),
             cancellation.Token);
@@ -245,19 +247,67 @@ public sealed class DownloadServiceTests
         cancellation.Cancel();
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => download);
+        Assert.AreEqual(VidoraErrorCode.Cancelled, logger.Entries.Single().ErrorCode);
         Assert.IsFalse(Directory.Exists(Path.Combine(directory.Path, "temp", request.Id.ToString("D"))));
         Assert.IsTrue(File.Exists(keepFile));
+    }
+
+    [TestMethod]
+    public async Task DownloadAsync_NonZeroExit_ClassifiesAndLogsWithRequestId()
+    {
+        using var directory = new TemporaryDirectory();
+        var logger = new CapturedLogger();
+        var result = new ProcessResult(
+            1,
+            ["raw metadata must not be logged"],
+            ["ERROR: Unable to write data: No space left on device; https://example.test/?token=secret-value"]);
+        var service = CreateService(
+            new FakeProcessRunner((_, _, _) => Task.FromResult(result)),
+            directory.Path,
+            logger: logger);
+
+        var exception = await Assert.ThrowsAsync<VidoraException>(() => service.DownloadAsync(
+            Request(directory.Path),
+            new CapturedProgress(),
+            CancellationToken.None));
+
+        Assert.AreEqual(VidoraErrorCode.InsufficientSpace, exception.Error.Code);
+        var entry = logger.Entries.Single();
+        Assert.AreEqual(Request(directory.Path).Id, entry.OperationId);
+        Assert.AreEqual(exception.Error.Code, entry.ErrorCode);
+        Assert.IsFalse(entry.Detail?.Contains("secret-value", StringComparison.Ordinal) ?? false);
+        Assert.IsFalse(entry.Detail?.Contains("raw metadata", StringComparison.Ordinal) ?? false);
+    }
+
+    [TestMethod]
+    public async Task DownloadAsync_LoggerFailure_DoesNotReplaceClassifiedError()
+    {
+        using var directory = new TemporaryDirectory();
+        var service = CreateService(
+            new FakeProcessRunner((_, _, _) => Task.FromResult(
+                new ProcessResult(1, [], ["ERROR: Video unavailable"]))),
+            directory.Path,
+            logger: new ThrowingLogger());
+
+        var exception = await Assert.ThrowsAsync<VidoraException>(() => service.DownloadAsync(
+            Request(directory.Path),
+            new CapturedProgress(),
+            CancellationToken.None));
+
+        Assert.AreEqual(VidoraErrorCode.Unavailable, exception.Error.Code);
     }
 
     private static DownloadService CreateService(
         IProcessRunner runner,
         string testRoot,
-        TaskWorkspaceService? workspace = null) => new(
+        TaskWorkspaceService? workspace = null,
+        IAppLogger? logger = null) => new(
         runner,
         new AppToolPaths(@"C:\tools\yt-dlp.exe", @"C:\tools\ffmpeg\ffmpeg.exe"),
         workspace ?? new TaskWorkspaceService(
             Path.Combine(testRoot, "temp"),
-            new WindowsCanonicalPathResolver()));
+            new WindowsCanonicalPathResolver()),
+        logger ?? new CapturedLogger());
 
     private static DownloadRequest Request(string destination) => new(
         Guid.Parse("11111111-1111-1111-1111-111111111111"),
@@ -296,6 +346,23 @@ public sealed class DownloadServiceTests
             ProcessSpec spec,
             IProgress<ProcessOutputLine>? output,
             CancellationToken cancellationToken) => run(spec, output, cancellationToken);
+    }
+
+    private sealed class CapturedLogger : IAppLogger
+    {
+        public List<FileLogEntry> Entries { get; } = [];
+
+        public Task WriteAsync(FileLogEntry entry, CancellationToken cancellationToken)
+        {
+            Entries.Add(entry);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingLogger : IAppLogger
+    {
+        public Task WriteAsync(FileLogEntry entry, CancellationToken cancellationToken) =>
+            Task.FromException(new IOException("Log path unavailable."));
     }
 
     private sealed class TemporaryDirectory : IDisposable
