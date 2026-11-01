@@ -15,8 +15,12 @@ public sealed class YtDlpUpdater(
     IProcessRunner processRunner,
     AppToolPaths toolPaths,
     IActiveDownloadCoordinator activeDownloads,
-    string updateTempRoot) : IYtDlpUpdater
+    string updateTempRoot,
+    Action<string, string, string?>? replaceFile = null,
+    TimeSpan? verificationTimeout = null) : IYtDlpUpdater
 {
+    private readonly TimeSpan verificationTimeout = verificationTimeout ?? TimeSpan.FromSeconds(30);
+
     public async Task<YtDlpReleaseInfo> UpdateAsync(CancellationToken cancellationToken)
     {
         EnsureNoActiveDownload();
@@ -25,18 +29,22 @@ public sealed class YtDlpUpdater(
         var workspace = Directory.CreateDirectory(
             Path.Combine(updateTempRoot, $"yt-dlp-{Guid.NewGuid():N}"));
         var stagedPath = Path.Combine(workspace.FullName, "yt-dlp.exe");
+        var backupPath = Path.Combine(workspace.FullName, "yt-dlp.previous.exe");
         try
         {
             await DownloadAsync(release.ExecutableUri, stagedPath, cancellationToken);
             await VerifyChecksumAsync(stagedPath, release.ExpectedSha256, cancellationToken);
             await VerifyVersionAsync(stagedPath, release.Version, cancellationToken);
             EnsureNoActiveDownload();
-            Replace(stagedPath, workspace.FullName);
+            Replace(stagedPath, backupPath);
             return release;
         }
         finally
         {
-            TryDeleteDirectory(workspace.FullName);
+            if (File.Exists(toolPaths.YtDlpPath) || !File.Exists(backupPath))
+            {
+                TryDeleteDirectory(workspace.FullName);
+            }
         }
     }
 
@@ -91,10 +99,20 @@ public sealed class YtDlpUpdater(
         string expectedVersion,
         CancellationToken cancellationToken)
     {
-        var result = await processRunner.RunAsync(
-            new ProcessSpec(stagedPath, ["--version"]),
-            null,
-            cancellationToken);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(verificationTimeout);
+        ProcessResult result;
+        try
+        {
+            result = await processRunner.RunAsync(
+                new ProcessSpec(stagedPath, ["--version"]),
+                null,
+                timeout.Token);
+        }
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("The downloaded yt-dlp version check timed out.", exception);
+        }
         var actualVersion = result.StandardOutput
             .FirstOrDefault(static line => !string.IsNullOrWhiteSpace(line))
             ?.Trim();
@@ -104,7 +122,7 @@ public sealed class YtDlpUpdater(
         }
     }
 
-    private void Replace(string stagedPath, string workspace)
+    private void Replace(string stagedPath, string backupPath)
     {
         var targetDirectory = Path.GetDirectoryName(Path.GetFullPath(toolPaths.YtDlpPath))!;
         Directory.CreateDirectory(targetDirectory);
@@ -114,8 +132,28 @@ public sealed class YtDlpUpdater(
             return;
         }
 
-        var backupPath = Path.Combine(workspace, "yt-dlp.previous.exe");
-        File.Replace(stagedPath, toolPaths.YtDlpPath, backupPath);
+        try
+        {
+            (replaceFile ?? File.Replace)(stagedPath, toolPaths.YtDlpPath, backupPath);
+        }
+        catch (Exception replaceException)
+        {
+            if (!File.Exists(toolPaths.YtDlpPath) && File.Exists(backupPath))
+            {
+                try
+                {
+                    File.Move(backupPath, toolPaths.YtDlpPath);
+                }
+                catch (Exception recoveryException)
+                {
+                    throw new IOException(
+                        $"The previous yt-dlp executable could not be restored. Backup: {backupPath}",
+                        new AggregateException(replaceException, recoveryException));
+                }
+            }
+
+            throw;
+        }
     }
 
     private void EnsureNoActiveDownload()

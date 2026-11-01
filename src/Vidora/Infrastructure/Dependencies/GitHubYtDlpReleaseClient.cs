@@ -6,33 +6,44 @@ using System.Text.Json;
 
 namespace Vidora.Infrastructure.Dependencies;
 
-public sealed class GitHubYtDlpReleaseClient(HttpClient httpClient) : IYtDlpReleaseClient
+public sealed class GitHubYtDlpReleaseClient(
+    HttpClient httpClient,
+    TimeSpan? operationTimeout = null) : IYtDlpReleaseClient
 {
     private const int MaxRedirects = 5;
     private const string ExecutableName = "yt-dlp.exe";
     private const string ManifestName = "SHA2-256SUMS";
     private static readonly Uri LatestReleaseUri = new(
         "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest");
+    private readonly TimeSpan operationTimeout = operationTimeout ?? TimeSpan.FromMinutes(5);
 
     public async Task<YtDlpReleaseInfo> GetLatestAsync(CancellationToken cancellationToken)
     {
-        using var response = await SendAsync(LatestReleaseUri, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        await using var content = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var document = await JsonDocument.ParseAsync(content, cancellationToken: cancellationToken);
-        var root = document.RootElement;
-        var version = root.GetProperty("tag_name").GetString();
-        if (string.IsNullOrWhiteSpace(version) || version.Any(character =>
-                !(char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-')))
+        using var timeout = CreateTimeout(cancellationToken);
+        try
         {
-            throw new InvalidDataException("The yt-dlp release version is invalid.");
-        }
+            using var response = await SendAsync(LatestReleaseUri, timeout.Token);
+            response.EnsureSuccessStatusCode();
+            await using var content = await response.Content.ReadAsStreamAsync(timeout.Token);
+            using var document = await JsonDocument.ParseAsync(content, cancellationToken: timeout.Token);
+            var root = document.RootElement;
+            var version = root.GetProperty("tag_name").GetString();
+            if (string.IsNullOrWhiteSpace(version) || version.Any(character =>
+                    !(char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-')))
+            {
+                throw new InvalidDataException("The yt-dlp release version is invalid.");
+            }
 
-        var assets = root.GetProperty("assets");
-        var executableUri = FindAsset(assets, version, ExecutableName);
-        var manifestUri = FindAsset(assets, version, ManifestName);
-        var checksum = await ReadExpectedChecksumAsync(manifestUri, cancellationToken);
-        return new YtDlpReleaseInfo(version, executableUri, manifestUri, checksum);
+            var assets = root.GetProperty("assets");
+            var executableUri = FindAsset(assets, version, ExecutableName);
+            var manifestUri = FindAsset(assets, version, ManifestName);
+            var checksum = await ReadExpectedChecksumAsync(manifestUri, timeout.Token);
+            return new YtDlpReleaseInfo(version, executableUri, manifestUri, checksum);
+        }
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("The yt-dlp release request timed out.", exception);
+        }
     }
 
     public async Task DownloadAssetAsync(
@@ -41,9 +52,24 @@ public sealed class GitHubYtDlpReleaseClient(HttpClient httpClient) : IYtDlpRele
         CancellationToken cancellationToken)
     {
         ValidateRepositoryAssetUri(assetUri);
-        using var response = await SendAssetAsync(assetUri, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        await response.Content.CopyToAsync(destination, cancellationToken);
+        using var timeout = CreateTimeout(cancellationToken);
+        try
+        {
+            using var response = await SendAssetAsync(assetUri, timeout.Token);
+            response.EnsureSuccessStatusCode();
+            await response.Content.CopyToAsync(destination, timeout.Token);
+        }
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException("The yt-dlp asset download timed out.", exception);
+        }
+    }
+
+    private CancellationTokenSource CreateTimeout(CancellationToken cancellationToken)
+    {
+        var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(operationTimeout);
+        return timeout;
     }
 
     private async Task<string> ReadExpectedChecksumAsync(

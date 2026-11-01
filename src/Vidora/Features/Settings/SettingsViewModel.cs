@@ -55,7 +55,7 @@ public partial class SettingsViewModel(
                 LatestYtDlpVersion = await dependencyService.GetLatestYtDlpVersionAsync(cancellationToken);
                 HasUpdateError = false;
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
             {
                 LatestYtDlpVersion = null;
                 HasUpdateError = true;
@@ -86,7 +86,7 @@ public partial class SettingsViewModel(
         {
             Report = await dependencyService.UpdateYtDlpAsync(cancellationToken);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             HasUpdateError = true;
         }

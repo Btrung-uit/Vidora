@@ -65,6 +65,41 @@ public sealed class SettingsViewModelUpdateTests
         Assert.IsFalse(viewModel.IsUpdating);
     }
 
+    [TestMethod]
+    public async Task CheckDependenciesCommand_HttpTimeout_ShowsRecoveryWithoutThrowing()
+    {
+        var service = new FakeDependencyService(
+            Report(DependencyStatus.Ready, "2026.09.01"),
+            "2026.10.26",
+            Report(DependencyStatus.Ready, "2026.10.26"))
+        {
+            LatestException = new TaskCanceledException("HTTP request timed out.")
+        };
+        var viewModel = new SettingsViewModel(service);
+
+        await viewModel.CheckDependenciesCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.HasUpdateError);
+        Assert.IsFalse(viewModel.IsChecking);
+    }
+
+    [TestMethod]
+    public async Task UpdateYtDlpCommand_HttpTimeout_ShowsRecoveryWithoutThrowing()
+    {
+        var current = Report(DependencyStatus.Ready, "2026.09.01");
+        var service = new FakeDependencyService(current, "2026.10.26", current)
+        {
+            UpdateException = new TaskCanceledException("HTTP request timed out.")
+        };
+        var viewModel = new SettingsViewModel(service);
+        await viewModel.CheckDependenciesCommand.ExecuteAsync(null);
+
+        await viewModel.UpdateYtDlpCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.HasUpdateError);
+        Assert.IsFalse(viewModel.IsUpdating);
+    }
+
     [STATestMethod]
     [DoNotParallelize]
     public void SettingsView_UpdateState_BindsExplicitActionAndRecoveryInstructions()
@@ -106,11 +141,15 @@ public sealed class SettingsViewModelUpdateTests
 
         public Exception? UpdateException { get; init; }
 
+        public Exception? LatestException { get; init; }
+
         public Task<DependencyReport> CheckAsync(CancellationToken cancellationToken) =>
             Task.FromResult(checkReport);
 
         public Task<string> GetLatestYtDlpVersionAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(latestVersion);
+            LatestException is null
+                ? Task.FromResult(latestVersion)
+                : Task.FromException<string>(LatestException);
 
         public Task<DependencyReport> UpdateYtDlpAsync(CancellationToken cancellationToken)
         {

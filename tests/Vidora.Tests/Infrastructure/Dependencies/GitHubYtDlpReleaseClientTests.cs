@@ -85,6 +85,21 @@ public sealed class GitHubYtDlpReleaseClientTests
         Assert.IsEmpty(requests);
     }
 
+    [TestMethod]
+    public async Task GetLatestAsync_ResponseBodyStalls_TimesOut()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StallingContent()
+        };
+        var client = new GitHubYtDlpReleaseClient(
+            new HttpClient(new QueueHandler([], response)),
+            TimeSpan.FromMilliseconds(25));
+
+        await Assert.ThrowsAsync<TimeoutException>(
+            () => client.GetLatestAsync(CancellationToken.None));
+    }
+
     private static string ReleaseJson(Uri executableUri, Uri manifestUri) => $$"""
         {
           "tag_name": "{{Version}}",
@@ -126,6 +141,42 @@ public sealed class GitHubYtDlpReleaseClientTests
         {
             requests.Add(request);
             return Task.FromResult(remaining.Dequeue());
+        }
+    }
+
+    private sealed class StallingContent : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            throw new NotSupportedException();
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+
+        protected override Task<Stream> CreateContentReadStreamAsync() =>
+            Task.FromResult<Stream>(new StallingStream());
+    }
+
+    private sealed class StallingStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return 0;
         }
     }
 }

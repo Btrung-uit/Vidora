@@ -110,6 +110,73 @@ public sealed class YtDlpUpdaterTests
     }
 
     [TestMethod]
+    public async Task UpdateAsync_ReplacementMovesOldFileThenFails_RestoresExistingExecutable()
+    {
+        using var files = new UpdateFiles(withExistingExecutable: true);
+        var release = Release(NewExecutable);
+        var updater = CreateUpdater(
+            files,
+            new FakeReleaseClient(release, NewExecutable),
+            ValidRunner(release),
+            replaceFile: (_, destination, backup) =>
+            {
+                File.Move(destination, backup!);
+                throw new IOException("Replacement failed after moving the destination.");
+            });
+
+        await Assert.ThrowsAsync<IOException>(() => updater.UpdateAsync(CancellationToken.None));
+
+        CollectionAssert.AreEqual(OldExecutable, await File.ReadAllBytesAsync(files.Paths.YtDlpPath));
+        Assert.IsEmpty(Directory.GetFileSystemEntries(files.UpdateTempRoot));
+    }
+
+    [TestMethod]
+    public async Task UpdateAsync_RestoreFails_PreservesBackupForRecovery()
+    {
+        using var files = new UpdateFiles(withExistingExecutable: true);
+        var release = Release(NewExecutable);
+        var updater = CreateUpdater(
+            files,
+            new FakeReleaseClient(release, NewExecutable),
+            ValidRunner(release),
+            replaceFile: (_, destination, backup) =>
+            {
+                File.Move(destination, backup!);
+                Directory.CreateDirectory(destination);
+                throw new IOException("Replacement failed after moving the destination.");
+            });
+
+        var exception = await Assert.ThrowsAsync<IOException>(
+            () => updater.UpdateAsync(CancellationToken.None));
+
+        StringAssert.Contains(exception.Message, "could not be restored");
+        var backup = Directory.GetFiles(files.UpdateTempRoot, "yt-dlp.previous.exe", SearchOption.AllDirectories);
+        Assert.HasCount(1, backup);
+        CollectionAssert.AreEqual(OldExecutable, await File.ReadAllBytesAsync(backup[0]));
+    }
+
+    [TestMethod]
+    public async Task UpdateAsync_VersionCommandStalls_TimesOutAndPreservesExistingExecutable()
+    {
+        using var files = new UpdateFiles(withExistingExecutable: true);
+        var release = Release(NewExecutable);
+        var updater = CreateUpdater(
+            files,
+            new FakeReleaseClient(release, NewExecutable),
+            new FakeProcessRunner(async (_, token) =>
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                throw new AssertFailedException("Unreachable.");
+            }),
+            verificationTimeout: TimeSpan.FromMilliseconds(25));
+
+        await Assert.ThrowsAsync<TimeoutException>(() => updater.UpdateAsync(CancellationToken.None));
+
+        CollectionAssert.AreEqual(OldExecutable, await File.ReadAllBytesAsync(files.Paths.YtDlpPath));
+        Assert.IsEmpty(Directory.GetFileSystemEntries(files.UpdateTempRoot));
+    }
+
+    [TestMethod]
     public async Task UpdateAsync_ActiveDownload_RejectsBeforeReleaseRequest()
     {
         using var files = new UpdateFiles(withExistingExecutable: true);
@@ -133,12 +200,16 @@ public sealed class YtDlpUpdaterTests
         UpdateFiles files,
         IYtDlpReleaseClient releaseClient,
         IProcessRunner processRunner,
-        bool hasActiveDownload = false) => new(
+        bool hasActiveDownload = false,
+        Action<string, string, string?>? replaceFile = null,
+        TimeSpan? verificationTimeout = null) => new(
         releaseClient,
         processRunner,
         files.Paths,
         new FakeActiveDownloadCoordinator(hasActiveDownload),
-        files.UpdateTempRoot);
+        files.UpdateTempRoot,
+        replaceFile,
+        verificationTimeout);
 
     private static FakeProcessRunner ValidRunner(YtDlpReleaseInfo release) => new((spec, _) =>
     {
