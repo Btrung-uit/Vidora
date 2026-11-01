@@ -9,4 +9,5 @@ public sealed record DownloadQueueItem(
     string? FinalPath,
     VidoraError? Error,
     int AttemptCount,
-    bool HasDuplicateUrlWarning);
+    bool HasDuplicateUrlWarning,
+    bool IsHistoryRecorded = false);

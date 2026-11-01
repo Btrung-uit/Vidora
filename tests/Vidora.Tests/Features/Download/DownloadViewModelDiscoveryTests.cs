@@ -127,6 +127,8 @@ public sealed class DownloadViewModelDiscoveryTests
 
     private sealed class StubQueueService : IDownloadQueueService
     {
+        public bool HasHistoryPersistenceError => false;
+
         public IReadOnlyList<DownloadQueueItem> Items => [];
 
         public event EventHandler? Changed;

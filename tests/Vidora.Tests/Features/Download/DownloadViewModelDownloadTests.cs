@@ -149,6 +149,8 @@ public sealed class DownloadViewModelDownloadTests
 
     private sealed class FakeQueueService : IDownloadQueueService
     {
+        public bool HasHistoryPersistenceError => false;
+
         private IReadOnlyList<DownloadQueueItem> items = [];
 
         public IReadOnlyList<DownloadQueueItem> Items => items;
