@@ -36,5 +36,11 @@ public sealed class SettingsViewModelPersistenceTests
     {
         public Task<DependencyReport> CheckAsync(CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+
+        public Task<string> GetLatestYtDlpVersionAsync(CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<DependencyReport> UpdateYtDlpAsync(CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 }

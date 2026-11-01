@@ -93,9 +93,12 @@
     <system:String x:Key="Dependency.YtDlp">yt-dlp</system:String>
     <system:String x:Key="Dependency.Ffmpeg">FFmpeg</system:String>
     <system:String x:Key="Dependency.Version">Phiên bản:</system:String>
+    <system:String x:Key="Dependency.LatestVersion">Phiên bản mới nhất:</system:String>
     <system:String x:Key="Dependency.Status.Checking">Đang kiểm tra...</system:String>
     <system:String x:Key="Dependency.Status.Ready">Sẵn sàng</system:String>
     <system:String x:Key="Dependency.Status.Missing">Chưa được cài đặt</system:String>
     <system:String x:Key="Dependency.Status.Invalid">Không thể sử dụng</system:String>
     <system:String x:Key="Dependency.CheckAgain">_Kiểm tra lại</system:String>
+    <system:String x:Key="Dependency.UpdateYtDlp">_Cài đặt hoặc cập nhật yt-dlp</system:String>
+    <system:String x:Key="Dependency.UpdateRecovery">Không thể cập nhật yt-dlp. Bản đang hoạt động được giữ nguyên; hãy dừng lượt tải đang chạy, kiểm tra mạng hoặc quyền ghi rồi thử lại.</system:String>
 </ResourceDictionary>

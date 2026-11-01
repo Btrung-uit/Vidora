@@ -135,6 +135,12 @@ public sealed class MainWindowViewModelTests
     {
         public Task<DependencyReport> CheckAsync(CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+
+        public Task<string> GetLatestYtDlpVersionAsync(CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<DependencyReport> UpdateYtDlpAsync(CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class StubDiscoveryService : IVideoDiscoveryService

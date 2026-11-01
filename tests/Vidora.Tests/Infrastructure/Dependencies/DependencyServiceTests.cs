@@ -18,7 +18,7 @@ public sealed class DependencyServiceTests
                 ? Result(0, "2026.10.30")
                 : Result(0, "ffmpeg version 7.1.1-full_build www.gyan.dev")));
 
-        var report = await new DependencyService(runner, tools.Paths).CheckAsync(CancellationToken.None);
+        var report = await CreateService(runner, tools.Paths).CheckAsync(CancellationToken.None);
 
         Assert.AreEqual(DependencyStatus.Ready, report.YtDlp.Status);
         Assert.AreEqual("2026.10.30", report.YtDlp.Version);
@@ -35,7 +35,7 @@ public sealed class DependencyServiceTests
             Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}-ffmpeg.exe"));
         var runner = new FakeProcessRunner((_, _) => throw new AssertFailedException("Missing tools must not be started."));
 
-        var report = await new DependencyService(runner, paths).CheckAsync(CancellationToken.None);
+        var report = await CreateService(runner, paths).CheckAsync(CancellationToken.None);
 
         Assert.AreEqual(DependencyStatus.Missing, report.YtDlp.Status);
         Assert.AreEqual(DependencyStatus.Missing, report.Ffmpeg.Status);
@@ -48,7 +48,7 @@ public sealed class DependencyServiceTests
         using var tools = new TemporaryToolFiles();
         var runner = new FakeProcessRunner((_, _) => Task.FromResult(Result(1, "broken")));
 
-        var report = await new DependencyService(runner, tools.Paths).CheckAsync(CancellationToken.None);
+        var report = await CreateService(runner, tools.Paths).CheckAsync(CancellationToken.None);
 
         Assert.AreEqual(DependencyStatus.Invalid, report.YtDlp.Status);
         Assert.AreEqual(DependencyStatus.Invalid, report.Ffmpeg.Status);
@@ -61,7 +61,7 @@ public sealed class DependencyServiceTests
         var runner = new FakeProcessRunner((_, token) => Task.FromException<ProcessResult>(
             new OperationCanceledException(token)));
 
-        var report = await new DependencyService(runner, tools.Paths).CheckAsync(CancellationToken.None);
+        var report = await CreateService(runner, tools.Paths).CheckAsync(CancellationToken.None);
 
         Assert.AreEqual(DependencyStatus.Invalid, report.YtDlp.Status);
         Assert.AreEqual(DependencyStatus.Invalid, report.Ffmpeg.Status);
@@ -89,6 +89,12 @@ public sealed class DependencyServiceTests
     private static ProcessResult Result(int exitCode, params string[] standardOutput) =>
         new(exitCode, standardOutput, []);
 
+    private static DependencyService CreateService(IProcessRunner runner, AppToolPaths paths) => new(
+        runner,
+        paths,
+        new StubReleaseClient(),
+        new StubUpdater());
+
     private static DependencyReport ReadyReport() => new(
         new DependencyComponentReport(DependencyStatus.Ready, "2026.10.30"),
         new DependencyComponentReport(DependencyStatus.Ready, "7.1.1"));
@@ -105,6 +111,26 @@ public sealed class DependencyServiceTests
     private sealed class FakeDependencyService(Task<DependencyReport> reportTask) : IDependencyService
     {
         public Task<DependencyReport> CheckAsync(CancellationToken cancellationToken) => reportTask;
+
+        public Task<string> GetLatestYtDlpVersionAsync(CancellationToken cancellationToken) =>
+            Task.FromResult("2026.10.26");
+
+        public Task<DependencyReport> UpdateYtDlpAsync(CancellationToken cancellationToken) => reportTask;
+    }
+
+    private sealed class StubReleaseClient : IYtDlpReleaseClient
+    {
+        public Task<YtDlpReleaseInfo> GetLatestAsync(CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task DownloadAssetAsync(Uri assetUri, Stream destination, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class StubUpdater : IYtDlpUpdater
+    {
+        public Task<YtDlpReleaseInfo> UpdateAsync(CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class TemporaryToolFiles : IDisposable

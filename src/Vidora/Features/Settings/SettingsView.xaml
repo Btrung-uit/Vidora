@@ -57,6 +57,35 @@
             </StackPanel>
         </Border>
 
+        <StackPanel Margin="0,0,0,16">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Margin="0,0,4,0" Text="{DynamicResource Dependency.LatestVersion}" />
+                <TextBlock x:Name="LatestYtDlpVersionText" Text="{Binding LatestYtDlpVersion}" />
+            </StackPanel>
+            <Button x:Name="UpdateYtDlpButton"
+                    Margin="0,8,0,0"
+                    Padding="12,8"
+                    HorizontalAlignment="Left"
+                    Content="{DynamicResource Dependency.UpdateYtDlp}"
+                    Command="{Binding UpdateYtDlpCommand}" />
+            <TextBlock x:Name="UpdateRecoveryText"
+                       Margin="0,8,0,0"
+                       Foreground="DarkOrange"
+                       Text="{DynamicResource Dependency.UpdateRecovery}"
+                       TextWrapping="Wrap">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasUpdateError}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </StackPanel>
+
         <Border Margin="0,0,0,16" Padding="16" BorderBrush="#FFD1D5DB" BorderThickness="1" CornerRadius="8">
             <StackPanel DataContext="{Binding Report.Ffmpeg}">
                 <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource Dependency.Ffmpeg}" />

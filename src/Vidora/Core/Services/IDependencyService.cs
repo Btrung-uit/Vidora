@@ -5,4 +5,8 @@ namespace Vidora.Core.Services;
 public interface IDependencyService
 {
     Task<DependencyReport> CheckAsync(CancellationToken cancellationToken);
+
+    Task<string> GetLatestYtDlpVersionAsync(CancellationToken cancellationToken);
+
+    Task<DependencyReport> UpdateYtDlpAsync(CancellationToken cancellationToken);
 }
