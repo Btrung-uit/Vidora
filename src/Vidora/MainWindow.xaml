@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:download="clr-namespace:Vidora.Features.Download"
+        xmlns:history="clr-namespace:Vidora.Features.History"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:settings="clr-namespace:Vidora.Features.Settings"
         xmlns:shell="clr-namespace:Vidora.Features.Shell"
@@ -66,23 +67,19 @@
                     </download:DownloadView.Style>
                 </download:DownloadView>
 
-                <ContentControl HorizontalAlignment="Center"
-                                VerticalAlignment="Center"
-                                FontSize="28"
-                                FontWeight="SemiBold">
-                    <ContentControl.Style>
-                        <Style TargetType="ContentControl">
+                <history:HistoryView x:Name="HistoryContent">
+                    <history:HistoryView.Style>
+                        <Style TargetType="history:HistoryView">
                             <Setter Property="Visibility" Value="Collapsed" />
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding CurrentPage}"
+                                <DataTrigger Binding="{Binding DataContext.CurrentPage, RelativeSource={RelativeSource AncestorType=Window}}"
                                              Value="{x:Static shell:ShellPage.History}">
-                                    <Setter Property="Content" Value="{DynamicResource Page.History}" />
                                     <Setter Property="Visibility" Value="Visible" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
-                    </ContentControl.Style>
-                </ContentControl>
+                    </history:HistoryView.Style>
+                </history:HistoryView>
 
                 <settings:SettingsView x:Name="SettingsContent">
                     <settings:SettingsView.Style>

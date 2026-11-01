@@ -6,6 +6,8 @@ public interface IDownloadQueueService
 {
     IReadOnlyList<DownloadQueueItem> Items { get; }
 
+    bool HasHistoryPersistenceError { get; }
+
     event EventHandler? Changed;
 
     Task InitializeAsync(CancellationToken cancellationToken);

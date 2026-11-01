@@ -9,7 +9,9 @@ namespace Vidora.Infrastructure.Processes;
 public sealed class DownloadQueueService(
     IDownloadService downloadService,
     IQueueStore queueStore,
-    IActiveDownloadCoordinator activeDownloads) : IDownloadQueueService
+    IActiveDownloadCoordinator activeDownloads,
+    IHistoryService historyService,
+    TimeProvider timeProvider) : IDownloadQueueService
 {
     private readonly object sync = new();
     private readonly SemaphoreSlim mutationGate = new(1, 1);
@@ -19,6 +21,7 @@ public sealed class DownloadQueueService(
     private Guid? currentTaskId;
     private bool initialized;
     private bool paused;
+    private bool hasHistoryPersistenceError;
 
     public IReadOnlyList<DownloadQueueItem> Items
     {
@@ -27,6 +30,17 @@ public sealed class DownloadQueueService(
             lock (sync)
             {
                 return items.ToArray();
+            }
+        }
+    }
+
+    public bool HasHistoryPersistenceError
+    {
+        get
+        {
+            lock (sync)
+            {
+                return hasHistoryPersistenceError;
             }
         }
     }
@@ -50,6 +64,8 @@ public sealed class DownloadQueueService(
                 paused = items.Count > 0;
                 initialized = true;
             }
+
+            await ReconcileHistoryAsync(cancellationToken);
         }
         finally
         {
@@ -65,6 +81,7 @@ public sealed class DownloadQueueService(
         await mutationGate.WaitAsync(cancellationToken);
         try
         {
+            var history = await historyService.LoadAsync(cancellationToken);
             DownloadQueueItem queued;
             lock (sync)
             {
@@ -77,7 +94,9 @@ public sealed class DownloadQueueService(
                     null,
                     null,
                     0,
-                    items.Any(item => item.Request.SourceUrl == snapshot.SourceUrl));
+                    items.Any(item => item.Request.SourceUrl == snapshot.SourceUrl) ||
+                    history.Any(item =>
+                        item.Status == DownloadStatus.Completed && item.SourceUrl == snapshot.SourceUrl));
                 items.Add(queued);
             }
 
@@ -92,17 +111,28 @@ public sealed class DownloadQueueService(
         StartProcessorIfNeeded();
     }
 
-    public Task ResumeAsync(CancellationToken cancellationToken)
+    public async Task ResumeAsync(CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        lock (sync)
+        await mutationGate.WaitAsync(cancellationToken);
+        try
         {
-            EnsureInitialized();
-            paused = false;
+            if (!await ReconcileHistoryAsync(cancellationToken))
+            {
+                return;
+            }
+
+            lock (sync)
+            {
+                EnsureInitialized();
+                paused = false;
+            }
+        }
+        finally
+        {
+            mutationGate.Release();
         }
 
         StartProcessorIfNeeded();
-        return Task.CompletedTask;
     }
 
     public async Task CancelActiveAsync(CancellationToken cancellationToken)
@@ -155,6 +185,7 @@ public sealed class DownloadQueueService(
         DownloadResult result,
         CancellationToken cancellationToken)
     {
+        DownloadQueueItem? interrupted = null;
         await mutationGate.WaitAsync(cancellationToken);
         try
         {
@@ -171,12 +202,15 @@ public sealed class DownloadQueueService(
                     Status = DownloadStatus.Interrupted,
                     Progress = null,
                     FinalPath = result.FinalPath,
-                    Error = result.Error
+                    Error = result.Error,
+                    IsHistoryRecorded = false
                 };
+                interrupted = items[index];
                 paused = true;
             }
 
             await SaveCurrentAsync(cancellationToken);
+            await TryRecordHistoryAsync(interrupted, cancellationToken);
         }
         finally
         {
@@ -208,6 +242,7 @@ public sealed class DownloadQueueService(
             {
                 DownloadQueueItem active;
                 CancellationTokenSource cancellation;
+                DownloadQueueItem? terminal = null;
                 await mutationGate.WaitAsync();
                 try
                 {
@@ -273,8 +308,10 @@ public sealed class DownloadQueueService(
                                 Status = result.Status,
                                 Progress = null,
                                 FinalPath = result.FinalPath,
-                                Error = result.Error
+                                Error = result.Error,
+                                IsHistoryRecorded = false
                             };
+                            terminal = items[index];
                         }
 
                         if (result.Status is DownloadStatus.Cancelled or DownloadStatus.Failed or DownloadStatus.Interrupted)
@@ -284,6 +321,11 @@ public sealed class DownloadQueueService(
                     }
 
                     await SaveCurrentAsync(CancellationToken.None);
+                    if (terminal is not null)
+                    {
+                        await TryRecordHistoryAsync(terminal, CancellationToken.None);
+                    }
+
                     lock (sync)
                     {
                         activeCancellation = null;
@@ -316,17 +358,20 @@ public sealed class DownloadQueueService(
                 : -1;
             if (index >= 0)
             {
-                items[index] = items[index] with
+                if (items[index].Status == DownloadStatus.Downloading)
                 {
-                    Status = DownloadStatus.Failed,
-                    Progress = null,
-                    Error = new VidoraError(
-                        VidoraErrorCode.DiskFailure,
-                        "Error.QueuePersistenceFailed",
-                        "Action.TryAgain",
-                        exception.Message,
-                        true)
-                };
+                    items[index] = items[index] with
+                    {
+                        Status = DownloadStatus.Failed,
+                        Progress = null,
+                        Error = new VidoraError(
+                            VidoraErrorCode.DiskFailure,
+                            "Error.QueuePersistenceFailed",
+                            "Action.TryAgain",
+                            exception.Message,
+                            true)
+                    };
+                }
             }
 
             paused = true;
@@ -368,10 +413,86 @@ public sealed class DownloadQueueService(
         await queueStore.SaveAsync(snapshot, cancellationToken);
     }
 
+    private async Task<bool> ReconcileHistoryAsync(CancellationToken cancellationToken)
+    {
+        DownloadQueueItem[] unrecorded;
+        lock (sync)
+        {
+            unrecorded = items
+                .Where(item => IsTerminal(item.Status) && !item.IsHistoryRecorded)
+                .ToArray();
+        }
+
+        foreach (var item in unrecorded)
+        {
+            if (!await TryRecordHistoryAsync(item, cancellationToken))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private async Task<bool> TryRecordHistoryAsync(
+        DownloadQueueItem item,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await historyService.AddAsync(ToHistoryItem(item), cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            lock (sync)
+            {
+                hasHistoryPersistenceError = true;
+                paused = true;
+            }
+
+            return false;
+        }
+
+        lock (sync)
+        {
+            var index = items.FindIndex(existing =>
+                existing.Request.Id == item.Request.Id && existing.AttemptCount == item.AttemptCount);
+            if (index >= 0)
+            {
+                items[index] = items[index] with { IsHistoryRecorded = true };
+            }
+
+            hasHistoryPersistenceError = items.Any(existing =>
+                IsTerminal(existing.Status) && !existing.IsHistoryRecorded);
+        }
+
+        await SaveCurrentAsync(cancellationToken);
+        return true;
+    }
+
+    private static bool IsTerminal(DownloadStatus status) =>
+        status is DownloadStatus.Completed or DownloadStatus.Failed or
+            DownloadStatus.Cancelled or DownloadStatus.Interrupted;
+
     private static DownloadRequest Snapshot(DownloadRequest request) => request with
     {
         Metadata = request.Metadata with { Formats = request.Metadata.Formats.ToArray() }
     };
+
+    private DownloadHistoryItem ToHistoryItem(DownloadQueueItem item) => new(
+        item.Request.Id,
+        item.AttemptCount,
+        timeProvider.GetUtcNow(),
+        item.Request.SourceUrl,
+        item.Request.Metadata.MediaId,
+        item.Request.Metadata.Title,
+        item.Request.Metadata.Platform,
+        item.Request.Metadata.Formats.ToArray(),
+        item.Request.Quality,
+        item.Request.DestinationDirectory,
+        item.Status,
+        item.FinalPath,
+        item.Error?.Code);
 
     private void EnsureInitialized()
     {

@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using Vidora.Core.Services;
 using Vidora.Features.Download;
+using Vidora.Features.History;
 using Vidora.Features.Settings;
 using Vidora.Features.Shell;
 using Vidora.Infrastructure.Dependencies;
@@ -39,10 +41,15 @@ public partial class App : Application
             "Vidora",
             "data");
         var queueStore = new QueueStore(Path.Combine(dataDirectory, "queue.json"), TimeProvider.System);
+        var historyService = new HistoryService(
+            Path.Combine(dataDirectory, "history.json"),
+            TimeProvider.System);
         var queueService = new DownloadQueueService(
             downloadService,
             queueStore,
-            activeDownloads);
+            activeDownloads,
+            historyService,
+            TimeProvider.System);
         var settingsStore = new SettingsStore(
             Path.Combine(dataDirectory, "settings.json"),
             TimeProvider.System);
@@ -54,9 +61,23 @@ public partial class App : Application
             settingsService,
             TimeProvider.System);
         await downloadViewModel.InitializeAsync(CancellationToken.None);
+        var historyViewModel = new HistoryViewModel(
+            historyService,
+            queueService,
+            path => Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }),
+            Clipboard.SetText,
+            () => MessageBox.Show(
+                MainWindow,
+                FindResource("History.ClearMessage") as string ?? string.Empty,
+                FindResource("History.ClearTitle") as string ?? string.Empty,
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) == MessageBoxResult.Yes,
+            TimeProvider.System);
+        await historyViewModel.InitializeAsync(CancellationToken.None);
         var settingsViewModel = new SettingsViewModel(
             dependencyService,
             IsPersistenceRecovery(queueStore.LastLoadStatus) ||
+            IsPersistenceRecovery(historyService.LastLoadStatus) ||
             IsPersistenceRecovery(settingsStore.LastLoadStatus));
         IAppShutdownCoordinator shutdownCoordinator = new AppShutdownCoordinator(
             activeDownloads,
@@ -74,6 +95,7 @@ public partial class App : Application
         MainWindow = new MainWindow(
             new MainWindowViewModel(),
             downloadViewModel,
+            historyViewModel,
             settingsViewModel,
             shutdownCoordinator);
         MainWindow.Show();
