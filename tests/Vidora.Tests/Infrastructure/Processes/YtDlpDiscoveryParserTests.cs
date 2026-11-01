@@ -254,6 +254,12 @@ public sealed class YtDlpDiscoveryParserTests
     private sealed class FakeDependencyService(DependencyReport report) : IDependencyService
     {
         public Task<DependencyReport> CheckAsync(CancellationToken cancellationToken) => Task.FromResult(report);
+
+        public Task<string> GetLatestYtDlpVersionAsync(CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<DependencyReport> UpdateYtDlpAsync(CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeProcessRunner(

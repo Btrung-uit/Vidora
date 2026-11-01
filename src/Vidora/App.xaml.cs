@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using Vidora.Core.Services;
 using Vidora.Features.Download;
@@ -24,9 +25,23 @@ public partial class App : Application
         var toolPaths = AppToolPaths.CreateDefault();
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         IAppLogger logger = new FileLogger(Path.Combine(localAppData, "Vidora", "logs"), TimeProvider.System);
+        IActiveDownloadCoordinator activeDownloads = new ActiveDownloadCoordinator();
+        var releaseHttpClient = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
+        {
+            Timeout = TimeSpan.FromSeconds(30)
+        };
+        IYtDlpReleaseClient releaseClient = new GitHubYtDlpReleaseClient(releaseHttpClient);
+        IYtDlpUpdater updater = new YtDlpUpdater(
+            releaseClient,
+            processRunner,
+            toolPaths,
+            activeDownloads,
+            Path.Combine(localAppData, "Vidora", "temp", "updates"));
         IDependencyService dependencyService = new DependencyService(
             processRunner,
-            toolPaths);
+            toolPaths,
+            releaseClient,
+            updater);
         IVideoDiscoveryService discoveryService = new VideoDiscoveryService(
             processRunner,
             dependencyService,
@@ -43,7 +58,6 @@ public partial class App : Application
             toolPaths,
             taskWorkspaceService,
             logger);
-        IActiveDownloadCoordinator activeDownloads = new ActiveDownloadCoordinator();
         var dataDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Vidora",

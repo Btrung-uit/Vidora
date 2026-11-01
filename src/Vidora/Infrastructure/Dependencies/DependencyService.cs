@@ -8,7 +8,9 @@ namespace Vidora.Infrastructure.Dependencies;
 
 public sealed class DependencyService(
     IProcessRunner processRunner,
-    AppToolPaths toolPaths) : IDependencyService
+    AppToolPaths toolPaths,
+    IYtDlpReleaseClient releaseClient,
+    IYtDlpUpdater updater) : IDependencyService
 {
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(10);
 
@@ -27,6 +29,15 @@ public sealed class DependencyService(
 
         await Task.WhenAll(ytDlpTask, ffmpegTask);
         return new DependencyReport(await ytDlpTask, await ffmpegTask);
+    }
+
+    public async Task<string> GetLatestYtDlpVersionAsync(CancellationToken cancellationToken) =>
+        (await releaseClient.GetLatestAsync(cancellationToken)).Version;
+
+    public async Task<DependencyReport> UpdateYtDlpAsync(CancellationToken cancellationToken)
+    {
+        await updater.UpdateAsync(cancellationToken);
+        return await CheckAsync(cancellationToken);
     }
 
     private async Task<DependencyComponentReport> CheckComponentAsync(
