@@ -10,6 +10,8 @@
         mc:Ignorable="d"
         Title="{DynamicResource App.Title}"
         AutomationProperties.Name="{DynamicResource App.Title}"
+        FontFamily="Segoe UI"
+        FontSize="14"
         Width="960"
         Height="600"
         MinWidth="720"
@@ -17,7 +19,7 @@
         WindowStartupLocation="CenterScreen">
     <Grid Background="{DynamicResource App.BackgroundBrush}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="200" />
+            <ColumnDefinition Width="160" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
@@ -26,6 +28,7 @@
                 Background="{DynamicResource Navigation.BackgroundBrush}">
             <StackPanel>
             <TextBlock Margin="8,4,8,24"
+                       Foreground="{DynamicResource Text.PrimaryBrush}"
                        FontSize="24"
                        FontWeight="SemiBold"
                        Text="{DynamicResource App.Title}" />
@@ -46,12 +49,13 @@
         </Border>
 
         <Border Grid.Column="1"
-                Margin="24"
-                Padding="32"
+                Margin="16"
+                Padding="24"
                 Background="{DynamicResource Content.BackgroundBrush}"
                 CornerRadius="12">
             <Grid>
-                <download:DownloadView x:Name="DownloadContent">
+                <download:DownloadView x:Name="DownloadContent"
+                                       Foreground="{DynamicResource Text.PrimaryBrush}">
                     <download:DownloadView.Style>
                         <Style TargetType="download:DownloadView">
                             <Style.Triggers>
@@ -68,7 +72,8 @@
                     </download:DownloadView.Style>
                 </download:DownloadView>
 
-                <history:HistoryView x:Name="HistoryContent">
+                <history:HistoryView x:Name="HistoryContent"
+                                     Foreground="{DynamicResource Text.PrimaryBrush}">
                     <history:HistoryView.Style>
                         <Style TargetType="history:HistoryView">
                             <Setter Property="Visibility" Value="Collapsed" />
@@ -82,7 +87,8 @@
                     </history:HistoryView.Style>
                 </history:HistoryView>
 
-                <settings:SettingsView x:Name="SettingsContent">
+                <settings:SettingsView x:Name="SettingsContent"
+                                       Foreground="{DynamicResource Text.PrimaryBrush}">
                     <settings:SettingsView.Style>
                         <Style TargetType="settings:SettingsView">
                             <Setter Property="Visibility" Value="Collapsed" />

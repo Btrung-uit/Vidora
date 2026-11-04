@@ -19,7 +19,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBlock FontSize="28"
+        <TextBlock FontSize="26"
                    FontWeight="SemiBold"
                    Text="{DynamicResource Download.Title}" />
 
@@ -46,7 +46,11 @@
                     Content="{DynamicResource Download.Discover}" />
         </Grid>
 
-        <Grid Grid.Row="2">
+        <ScrollViewer Grid.Row="2"
+                      CanContentScroll="False"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <Grid>
             <TextBlock HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        Foreground="{DynamicResource Text.SecondaryBrush}"
@@ -84,7 +88,7 @@
                         Content="{DynamicResource Download.CancelDiscovery}" />
             </StackPanel>
 
-            <Border Padding="20" CornerRadius="8" BorderBrush="{DynamicResource Border.Brush}" BorderThickness="1">
+            <Border Padding="20" CornerRadius="12" BorderBrush="{DynamicResource Border.Brush}" BorderThickness="1">
                 <Border.Style>
                     <Style TargetType="Border">
                         <Setter Property="Visibility" Value="Collapsed" />
@@ -97,11 +101,14 @@
                 </Border.Style>
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="240" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="3*" />
+                        <ColumnDefinition Width="7*" />
                     </Grid.ColumnDefinitions>
-                    <Image Height="135" Stretch="UniformToFill" Source="{Binding Metadata.ThumbnailUrl}" />
-                    <StackPanel Grid.Column="1" Margin="20,0,0,0">
+                    <Image MaxHeight="260"
+                           VerticalAlignment="Top"
+                           Stretch="Uniform"
+                           Source="{Binding Metadata.ThumbnailUrl}" />
+                    <StackPanel Grid.Column="1" Margin="16,0,0,0">
                         <TextBlock FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Metadata.Title}" />
                         <TextBlock Margin="0,10,0,0" Text="{Binding Metadata.Author}" />
                         <TextBlock Margin="0,6,0,0" Text="{Binding Metadata.Platform}" />
@@ -122,11 +129,6 @@
                                     Click="ChooseFolder_Click"
                                     Content="{DynamicResource Download.ChooseFolder}" />
                         </Grid>
-                        <Button Margin="0,14,0,0"
-                                Padding="16,6"
-                                HorizontalAlignment="Left"
-                                Command="{Binding StartDownloadCommand}"
-                                Content="{DynamicResource Download.Start}" />
                         <StackPanel x:Name="DownloadResultPanel" Margin="0,14,0,0">
                             <StackPanel.Style>
                                 <Style TargetType="StackPanel">
@@ -198,7 +200,7 @@
                                     CommandParameter="{Binding DownloadError}"
                                     Content="{DynamicResource Diagnostics.Copy}">
                                 <Button.Style>
-                                    <Style TargetType="Button">
+                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
                                         <Setter Property="Visibility" Value="Collapsed" />
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding LastDownloadStatus}" Value="{x:Static models:DownloadStatus.Failed}">
@@ -235,7 +237,8 @@
                         CommandParameter="{Binding Error}"
                         Content="{DynamicResource Diagnostics.Copy}" />
             </StackPanel>
-        </Grid>
+            </Grid>
+        </ScrollViewer>
 
         <StackPanel Grid.Row="3" Margin="0,16,0,0">
             <StackPanel x:Name="ActiveDownloadPanel" Margin="0,0,0,12">
@@ -266,19 +269,46 @@
                         Command="{Binding CancelDownloadCommand}"
                         Content="{DynamicResource Download.Cancel}" />
             </StackPanel>
-            <DockPanel Margin="0,0,0,8">
+            <DockPanel LastChildFill="False" Margin="0,0,0,8">
                 <TextBlock VerticalAlignment="Center"
                            FontSize="18"
                            FontWeight="SemiBold"
                            Text="{DynamicResource Queue.Title}" />
-                <Button x:Name="ResumeQueueButton"
-                        DockPanel.Dock="Right"
-                        Padding="12,4"
-                        Command="{Binding ResumeQueueCommand}"
-                        Content="{DynamicResource Queue.Resume}" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="StartDownloadButton"
+                            Margin="0,0,8,0"
+                            Padding="12,4"
+                            Command="{Binding StartDownloadCommand}"
+                            Content="{DynamicResource Download.Start}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding State}" Value="{x:Static download:DownloadDiscoveryState.Ready}">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button x:Name="ResumeQueueButton"
+                            Padding="12,4"
+                            Command="{Binding ResumeQueueCommand}"
+                            Content="{DynamicResource Queue.Resume}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding QueueItems.Count}" Value="0">
+                                        <Setter Property="IsEnabled" Value="False" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </StackPanel>
             </DockPanel>
             <ScrollViewer x:Name="QueueScrollViewer"
-                          MaxHeight="220"
+                          MaxHeight="140"
                           VerticalScrollBarVisibility="Auto">
                 <ItemsControl x:Name="QueueList" ItemsSource="{Binding QueueItems}">
                     <ItemsControl.ItemTemplate>
@@ -287,7 +317,7 @@
                                     Padding="10"
                                     BorderBrush="{DynamicResource Border.Brush}"
                                     BorderThickness="1"
-                                    CornerRadius="6">
+                                    CornerRadius="12">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -300,7 +330,7 @@
                                                    Foreground="{DynamicResource Text.SecondaryBrush}"
                                                    Text="{Binding Request.DestinationDirectory}" />
                                         <TextBlock Margin="0,3,0,0"
-                                                   Foreground="DarkOrange"
+                                                   Foreground="{DynamicResource Warning.ForegroundBrush}"
                                                    Text="{DynamicResource Queue.DuplicateWarning}">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">

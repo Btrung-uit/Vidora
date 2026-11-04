@@ -10,6 +10,21 @@ namespace Vidora.Tests.Infrastructure.Dependencies;
 public sealed class DependencyServiceTests
 {
     [TestMethod]
+    public void CreateDefault_BundledYtDlp_FirstLaunchCopiesIntoWritableLocalData()
+    {
+        using var directory = new TemporaryToolFiles();
+        var bundledDirectory = Directory.CreateDirectory(Path.Combine(directory.Root, "app", "tools"));
+        var localDataDirectory = Path.Combine(directory.Root, "local");
+        var bundled = Path.Combine(bundledDirectory.FullName, "yt-dlp.exe");
+        File.WriteAllBytes(bundled, [1, 2, 3, 4]);
+
+        var paths = AppToolPaths.CreateDefault(bundledDirectory.Parent!.FullName, localDataDirectory);
+
+        CollectionAssert.AreEqual(new byte[] { 1, 2, 3, 4 }, File.ReadAllBytes(paths.YtDlpPath));
+        Assert.AreEqual(Path.Combine(localDataDirectory, "Vidora", "tools", "yt-dlp.exe"), paths.YtDlpPath);
+    }
+
+    [TestMethod]
     public async Task CheckAsync_SuccessfulVersionCommands_MarksBothComponentsReady()
     {
         using var tools = new TemporaryToolFiles();
@@ -136,6 +151,8 @@ public sealed class DependencyServiceTests
     private sealed class TemporaryToolFiles : IDisposable
     {
         private readonly DirectoryInfo directory = Directory.CreateTempSubdirectory("vidora-dependency-test-");
+
+        public string Root => directory.FullName;
 
         public TemporaryToolFiles()
         {
