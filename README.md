@@ -136,6 +136,8 @@ dotnet run --project src/Vidora/Vidora.csproj -c Release
 
 The application downloads the official yt-dlp executable at runtime and verifies its release checksum. FFmpeg must be available at the expected app tools path for media operations. No installer or portable ZIP is currently approved for distribution.
 
+To generate a local portable ZIP from the verified binaries already installed on this machine, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-portable-zip.ps1`. The archive is written under ignored `artifacts/portable/`. It includes GPLv3 FFmpeg; do not publicly redistribute this locally generated archive until complete corresponding source and all applicable notices are included.
+
 ## Documentation
 
 The architecture, data model, process protocol, safety rules, testing strategy, and release constraints are documented in [technical-design.md](technical-design.md).
