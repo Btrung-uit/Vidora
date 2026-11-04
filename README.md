@@ -51,6 +51,33 @@ User-selected local folder
 
 Vidora does not provide a backend service, account system, cloud database, or remote analytics.
 
+## System Design
+
+- **Presentation:** WPF views and MVVM view models handle discovery, queue, history, and settings screens.
+- **Core:** shared models, error types, and service contracts keep UI workflows separate from process and storage details.
+- **Infrastructure:** implements URL validation, `yt-dlp`/FFmpeg process execution, progress and error parsing, dependency updates, safe file handling, notifications, and persistence.
+- **Download flow:** validate a public video URL, ask `yt-dlp` for metadata, then enqueue the user's selected quality and destination. The FIFO queue runs one download at a time; process output updates progress, and cancellation stops the active process tree.
+- **Local state and safety:** settings, queue, and history use versioned atomic JSON under `%LOCALAPPDATA%\Vidora`. Output paths are validated, completed files are protected from overwrite, and cleanup is limited to task-owned temporary files.
+
+See [technical-design.md](technical-design.md) for detailed data flow, process protocol, and failure handling.
+
+## Repository Structure
+
+```text
+src/Vidora/
+├── Core/             # Models, errors, and service contracts
+├── Features/         # Download, history, settings, and shell UI
+├── Infrastructure/  # Processes, persistence, files, dependencies, and logging
+├── Resources/        # Themes and localized UI strings
+└── Properties/       # Publish configuration
+tests/Vidora.Tests/   # Unit tests and discovery fixtures
+docs/                 # Plans, platform matrix, and release checklist
+installer/            # Windows installer definition
+scripts/              # Portable ZIP build script
+```
+
+Build output and generated artifacts (`bin`, `obj`, and `artifacts`) are omitted.
+
 ## Technology
 
 | Area | Choice |
