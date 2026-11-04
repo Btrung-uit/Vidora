@@ -7,7 +7,7 @@ using Microsoft.Win32;
 
 namespace Vidora.Features.Download;
 
-public partial class DownloadView : UserControl
+public partial class DownloadView : System.Windows.Controls.UserControl
 {
     public DownloadView() => InitializeComponent();
 
@@ -35,7 +35,7 @@ public partial class DownloadView : UserControl
 public sealed class ResourceKeyConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is string key ? Application.Current?.TryFindResource(key) ?? key : string.Empty;
+        value is string key ? System.Windows.Application.Current?.TryFindResource(key) ?? key : string.Empty;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();

@@ -27,6 +27,16 @@
         <TextBlock Margin="0,0,0,24"
                    Text="{DynamicResource Dependency.Description}"
                    TextWrapping="Wrap" />
+        <TextBlock Text="{DynamicResource Settings.Theme}" />
+        <ComboBox x:Name="ThemeSelector" AutomationProperties.Name="{DynamicResource Settings.Theme}"
+                  SelectedValuePath="Tag" SelectedValue="{Binding Theme, UpdateSourceTrigger=PropertyChanged}">
+            <ComboBoxItem Content="{DynamicResource Settings.Theme.System}" Tag="System" />
+            <ComboBoxItem Content="{DynamicResource Settings.Theme.Light}" Tag="Light" />
+            <ComboBoxItem Content="{DynamicResource Settings.Theme.Dark}" Tag="Dark" />
+        </ComboBox>
+        <CheckBox Margin="0,8,0,16" AutomationProperties.Name="{DynamicResource Settings.Notifications}"
+                  Content="{DynamicResource Settings.Notifications}"
+                  IsChecked="{Binding NotificationsEnabled, UpdateSourceTrigger=PropertyChanged}" />
         <TextBlock x:Name="PersistenceRecoveryWarning"
                    Margin="0,0,0,16"
                    Padding="12"

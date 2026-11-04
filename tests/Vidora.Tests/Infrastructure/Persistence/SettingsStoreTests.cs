@@ -19,6 +19,19 @@ public sealed class SettingsStoreTests
     }
 
     [TestMethod]
+    public async Task SaveAndLoadAsync_ThemeAndNotifications_RoundTrip()
+    {
+        using var directory = new TemporaryDirectory();
+        var store = new SettingsStore(Path.Combine(directory.Path, "settings.json"), TimeProvider.System);
+
+        await store.SaveAsync(new AppSettings(@"C:\Videos", "Dark", false), CancellationToken.None);
+
+        var restored = await store.LoadAsync(CancellationToken.None);
+        Assert.AreEqual("Dark", restored.Theme);
+        Assert.IsFalse(restored.NotificationsEnabled);
+    }
+
+    [TestMethod]
     public async Task LoadAsync_NullSettings_QuarantinesAndReturnsDefaults()
     {
         using var directory = new TemporaryDirectory();
