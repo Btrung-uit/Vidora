@@ -94,6 +94,8 @@
     <system:String x:Key="Settings.Theme.Light">Sáng</system:String>
     <system:String x:Key="Settings.Theme.Dark">Tối</system:String>
     <system:String x:Key="Settings.Notifications">Thông báo khi tải xong hoặc thất bại</system:String>
+    <system:String x:Key="Notification.Completed">Tải video hoàn tất.</system:String>
+    <system:String x:Key="Notification.Failed">Tải video thất bại.</system:String>
     <system:String x:Key="Settings.PersistenceRecoveryWarning">Một file dữ liệu không thể đọc được. Vidora đã giữ lại file cũ khi có thể và khởi động với dữ liệu mặc định.</system:String>
     <system:String x:Key="Dependency.Description">Kiểm tra các công cụ cần thiết để tải và xử lý video.</system:String>
     <system:String x:Key="Dependency.YtDlp">yt-dlp</system:String>

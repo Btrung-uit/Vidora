@@ -125,8 +125,10 @@ public partial class App : System.Windows.Application
 
                 notificationStates[item.Request.Id] = item.Status;
                 notificationService.Show(
-                    item.Status == DownloadStatus.Completed ? "Vidora" : "Vidora",
-                    item.Status == DownloadStatus.Completed ? "Tải video hoàn tất." : "Tải video thất bại.");
+                    FindResource("App.Title") as string ?? "Vidora",
+                    FindResource(item.Status == DownloadStatus.Completed
+                        ? "Notification.Completed"
+                        : "Notification.Failed") as string ?? string.Empty);
             }
         };
         var settingsViewModel = new SettingsViewModel(
