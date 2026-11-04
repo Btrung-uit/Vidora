@@ -1,8 +1,8 @@
 # Vidora
 
-Vidora is a local-first Windows desktop application for downloading publicly accessible videos from YouTube, Facebook, Instagram, and TikTok without relying on unstable third-party downloader websites.
+Vidora is a local-first Windows desktop application for discovering and downloading publicly accessible videos with yt-dlp. YouTube, Facebook, Instagram, and TikTok are intended sources; individual platform support remains subject to the dated release checks below.
 
-> **Project status:** Technical design complete. Implementation has not started yet.
+> **Project status (2026-11-04):** MVP implementation and automated tests are present. A distributable release is not ready: the FFmpeg Windows build has not been selected or audited, and clean-machine/platform acceptance checks are pending. See [release checklist](docs/release-checklist.md) and [platform test matrix](docs/platform-test-matrix.md).
 
 ## Why Vidora?
 
@@ -13,9 +13,9 @@ Online video downloaders are often unreliable, filled with intrusive ads, or req
 - No Vidora server handles URLs, metadata, or downloaded media.
 - The interface hides command-line, codec, and post-processing complexity.
 
-## Planned MVP
+## Implemented MVP scope
 
-- Download public videos from YouTube, Facebook, Instagram, and TikTok.
+- Accept public video links for discovery/download through yt-dlp. Per-platform release support remains unverified until the sample matrix passes.
 - Preview the title, thumbnail, author, duration, and detected platform.
 - Choose Best, 1080p, 720p, or 480p quality presets.
 - Select and remember the destination folder.
@@ -63,7 +63,7 @@ Vidora does not provide a backend service, account system, cloud database, or re
 | Media processing | FFmpeg |
 | Persistence | Atomic local JSON with `System.Text.Json` |
 | Testing | MSTest |
-| Distribution | Self-contained installer, with a portable ZIP planned |
+| Distribution | Self-contained Windows x64 publish profile; installer/ZIP pending release gates |
 
 The project intentionally avoids a hosted backend, database server, heavy application framework, and custom platform extractors.
 
@@ -123,14 +123,27 @@ These constraints keep the first release focused on reliable, safe single-video 
 - Expanded accessibility verification.
 - Additional platforms only after a separate technical evaluation.
 
+## Build from source
+
+Requires .NET SDK 10.0.401 or a compatible latest patch of .NET 10 and Windows 11 x64 with the Windows desktop workload.
+
+```powershell
+dotnet restore Vidora.sln --locked-mode
+dotnet build Vidora.sln -c Release --no-restore
+dotnet test Vidora.sln -c Release --no-build
+dotnet run --project src/Vidora/Vidora.csproj -c Release
+```
+
+The application downloads the official yt-dlp executable at runtime and verifies its release checksum. FFmpeg must be available at the expected app tools path for media operations. No installer or portable ZIP is currently approved for distribution.
+
 ## Documentation
 
 The architecture, data model, process protocol, safety rules, testing strategy, and release constraints are documented in [technical-design.md](technical-design.md).
 
-An implementation plan will be added before production code is written.
+The implementation sequence and evidence are tracked in [the MVP plan](docs/superpowers/plans/2026-10-30-vidora-mvp.md). Packaging gates are listed in [the release checklist](docs/release-checklist.md).
 
 ## Legal and responsible use
 
 Vidora is intended for content that users own, are authorized to download, or are otherwise permitted to use. It will not bypass DRM or access controls. Users are responsible for following applicable laws, copyright requirements, and platform terms.
 
-`yt-dlp`, FFmpeg, and other third-party components retain their respective licenses. Exact dependency versions, attribution, and notices will be included before the first distributable release.
+Third-party terms and the FFmpeg packaging gate are recorded in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Vidora does not bundle an unaudited FFmpeg build. No claim is made that every URL from a listed platform will always work; release support requires a passing dated sample in the platform matrix.
