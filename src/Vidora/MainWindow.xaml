@@ -9,6 +9,7 @@
         xmlns:shell="clr-namespace:Vidora.Features.Shell"
         mc:Ignorable="d"
         Title="{DynamicResource App.Title}"
+        AutomationProperties.Name="{DynamicResource App.Title}"
         Width="960"
         Height="600"
         MinWidth="720"
@@ -29,15 +30,15 @@
                        FontWeight="SemiBold"
                        Text="{DynamicResource App.Title}" />
 
-            <Button Content="{DynamicResource Navigation.Download}"
+            <Button AutomationProperties.Name="{DynamicResource Navigation.Download}" Content="{DynamicResource Navigation.Download}"
                     Command="{Binding NavigateCommand}"
                     CommandParameter="{x:Static shell:ShellPage.Download}"
                     Style="{StaticResource NavigationButtonStyle}" />
-            <Button Content="{DynamicResource Navigation.History}"
+            <Button AutomationProperties.Name="{DynamicResource Navigation.History}" Content="{DynamicResource Navigation.History}"
                     Command="{Binding NavigateCommand}"
                     CommandParameter="{x:Static shell:ShellPage.History}"
                     Style="{StaticResource NavigationButtonStyle}" />
-                <Button Content="{DynamicResource Navigation.Settings}"
+                <Button AutomationProperties.Name="{DynamicResource Navigation.Settings}" Content="{DynamicResource Navigation.Settings}"
                         Command="{Binding NavigateCommand}"
                         CommandParameter="{x:Static shell:ShellPage.Settings}"
                         Style="{StaticResource NavigationButtonStyle}" />

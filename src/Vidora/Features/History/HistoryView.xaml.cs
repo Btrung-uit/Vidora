@@ -2,7 +2,7 @@ using System.Windows.Controls;
 
 namespace Vidora.Features.History;
 
-public partial class HistoryView : UserControl
+public partial class HistoryView : System.Windows.Controls.UserControl
 {
     public HistoryView()
     {

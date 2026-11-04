@@ -249,7 +249,8 @@
                         </Style.Triggers>
                     </Style>
                 </StackPanel.Style>
-                <ProgressBar Height="8" Maximum="100" Value="{Binding Progress.Percent}" />
+                <ProgressBar Height="8" Maximum="100" Value="{Binding Progress.Percent}"
+                             AutomationProperties.Name="{DynamicResource Download.Progress}" />
                 <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
                     <TextBlock Text="{DynamicResource Download.Bytes}" />
                     <TextBlock Margin="4,0,12,0" Text="{Binding Progress.DownloadedBytes}" />

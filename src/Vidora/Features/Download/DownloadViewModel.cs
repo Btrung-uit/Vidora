@@ -101,9 +101,9 @@ public partial class DownloadViewModel : ObservableObject
     [RelayCommand]
     private void Paste()
     {
-        if (Clipboard.ContainsText())
+        if (System.Windows.Clipboard.ContainsText())
         {
-            Url = Clipboard.GetText().Trim();
+            Url = System.Windows.Clipboard.GetText().Trim();
         }
     }
 
@@ -210,7 +210,8 @@ public partial class DownloadViewModel : ObservableObject
             cancellationToken);
         if (Directory.Exists(DestinationDirectory))
         {
-            await settingsService.SaveAsync(new AppSettings(DestinationDirectory), cancellationToken);
+            var settings = await settingsService.LoadAsync(cancellationToken);
+            await settingsService.SaveAsync(settings with { LastDestinationDirectory = DestinationDirectory }, cancellationToken);
         }
     }
 

@@ -7,9 +7,49 @@ namespace Vidora.Features.Settings;
 
 public partial class SettingsViewModel(
     IDependencyService dependencyService,
-    bool hasPersistenceRecoveryWarning = false) : ObservableObject
+    bool hasPersistenceRecoveryWarning = false,
+    ISettingsService? settingsService = null,
+    IThemeService? themeService = null) : ObservableObject
 {
+    private AppSettings appSettings = new(null);
     public bool HasPersistenceRecoveryWarning { get; } = hasPersistenceRecoveryWarning;
+
+    [ObservableProperty]
+    public partial string Theme { get; set; } = "System";
+
+    [ObservableProperty]
+    public partial bool NotificationsEnabled { get; set; } = true;
+
+    public async Task InitializeSettingsAsync(CancellationToken cancellationToken)
+    {
+        if (settingsService is null)
+        {
+            return;
+        }
+
+        var settings = await settingsService.LoadAsync(cancellationToken);
+        appSettings = settings;
+        Theme = settings.Theme;
+        NotificationsEnabled = settings.NotificationsEnabled;
+        themeService?.Apply(Theme);
+    }
+
+    partial void OnThemeChanged(string value)
+    {
+        themeService?.Apply(value);
+        _ = SaveSettingsAsync();
+    }
+
+    partial void OnNotificationsEnabledChanged(bool value) => _ = SaveSettingsAsync();
+
+    private async Task SaveSettingsAsync()
+    {
+        if (settingsService is not null)
+        {
+            appSettings = appSettings with { Theme = Theme, NotificationsEnabled = NotificationsEnabled };
+            await settingsService.SaveAsync(appSettings, CancellationToken.None);
+        }
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsReady))]

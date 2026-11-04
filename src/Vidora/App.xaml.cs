@@ -3,6 +3,7 @@ using System.IO;
 using System.Net.Http;
 using System.Windows;
 using Vidora.Core.Services;
+using Vidora.Core.Models;
 using Vidora.Features.Download;
 using Vidora.Features.History;
 using Vidora.Features.Settings;
@@ -10,12 +11,13 @@ using Vidora.Features.Shell;
 using Vidora.Infrastructure.Dependencies;
 using Vidora.Infrastructure.Files;
 using Vidora.Infrastructure.Logging;
+using Vidora.Infrastructure.Notifications;
 using Vidora.Infrastructure.Persistence;
 using Vidora.Infrastructure.Processes;
 
 namespace Vidora;
 
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -76,20 +78,23 @@ public partial class App : Application
             Path.Combine(dataDirectory, "settings.json"),
             TimeProvider.System);
         ISettingsService settingsService = settingsStore;
+        var themeService = new WpfThemeService(this);
+        var notificationService = new WindowsNotificationService();
+        Exit += (_, _) => notificationService.Dispose();
         await queueService.InitializeAsync(CancellationToken.None);
         var downloadViewModel = new DownloadViewModel(
             discoveryService,
             queueService,
             settingsService,
             TimeProvider.System,
-            copyText: Clipboard.SetText);
+            copyText: System.Windows.Clipboard.SetText);
         await downloadViewModel.InitializeAsync(CancellationToken.None);
         var historyViewModel = new HistoryViewModel(
             historyService,
             queueService,
             path => Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }),
-            Clipboard.SetText,
-            () => MessageBox.Show(
+            System.Windows.Clipboard.SetText,
+            () => System.Windows.MessageBox.Show(
                 MainWindow,
                 FindResource("History.ClearMessage") as string ?? string.Empty,
                 FindResource("History.ClearTitle") as string ?? string.Empty,
@@ -97,14 +102,44 @@ public partial class App : Application
                 MessageBoxImage.Warning) == MessageBoxResult.Yes,
             TimeProvider.System);
         await historyViewModel.InitializeAsync(CancellationToken.None);
+        var notificationStates = new Dictionary<Guid, DownloadStatus>();
+        queueService.Changed += async (_, _) =>
+        {
+            if (MainWindow?.IsActive != false)
+            {
+                return;
+            }
+
+            if (!(await settingsService.LoadAsync(CancellationToken.None)).NotificationsEnabled)
+            {
+                return;
+            }
+
+            foreach (var item in queueService.Items.Where(item =>
+                         item.Status is DownloadStatus.Completed or DownloadStatus.Failed))
+            {
+                if (notificationStates.TryGetValue(item.Request.Id, out var previous) && previous == item.Status)
+                {
+                    continue;
+                }
+
+                notificationStates[item.Request.Id] = item.Status;
+                notificationService.Show(
+                    item.Status == DownloadStatus.Completed ? "Vidora" : "Vidora",
+                    item.Status == DownloadStatus.Completed ? "Tải video hoàn tất." : "Tải video thất bại.");
+            }
+        };
         var settingsViewModel = new SettingsViewModel(
             dependencyService,
             IsPersistenceRecovery(queueStore.LastLoadStatus) ||
             IsPersistenceRecovery(historyService.LastLoadStatus) ||
-            IsPersistenceRecovery(settingsStore.LastLoadStatus));
+            IsPersistenceRecovery(settingsStore.LastLoadStatus),
+            settingsService,
+            themeService);
+        await settingsViewModel.InitializeSettingsAsync(CancellationToken.None);
         IAppShutdownCoordinator shutdownCoordinator = new AppShutdownCoordinator(
             activeDownloads,
-            () => MessageBox.Show(
+            () => System.Windows.MessageBox.Show(
                 MainWindow,
                 FindResource("Shutdown.Message") as string ?? string.Empty,
                 FindResource("Shutdown.Title") as string ?? string.Empty,
