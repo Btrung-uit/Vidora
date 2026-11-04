@@ -61,7 +61,7 @@ public sealed class DownloadQueueService(
                 }
 
                 items.AddRange(restored);
-                paused = items.Count > 0;
+                paused = items.Any(item => item.Status == DownloadStatus.Pending);
                 initialized = true;
             }
 

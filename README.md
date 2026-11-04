@@ -2,7 +2,7 @@
 
 Vidora is a local-first Windows desktop application for discovering and downloading publicly accessible videos with yt-dlp. YouTube, Facebook, Instagram, and TikTok are intended sources; individual platform support remains subject to the dated release checks below.
 
-> **Project status (2026-11-04):** MVP implementation and automated tests are present. A distributable release is not ready: the FFmpeg Windows build has not been selected or audited, and clean-machine/platform acceptance checks are pending. See [release checklist](docs/release-checklist.md) and [platform test matrix](docs/platform-test-matrix.md).
+> **Project status (2026-11-05):** MVP implementation and automated tests are present, and a local portable ZIP can be generated. Public redistribution is not approved yet: complete FFmpeg corresponding-source materials and clean-machine/platform acceptance checks are still pending. See [release checklist](docs/release-checklist.md) and [platform test matrix](docs/platform-test-matrix.md).
 
 ## Why Vidora?
 
@@ -63,7 +63,7 @@ Vidora does not provide a backend service, account system, cloud database, or re
 | Media processing | FFmpeg |
 | Persistence | Atomic local JSON with `System.Text.Json` |
 | Testing | MSTest |
-| Distribution | Self-contained Windows x64 publish profile; installer/ZIP pending release gates |
+| Distribution | Self-contained Windows x64 publish; local portable ZIP; public release pending release gates |
 
 The project intentionally avoids a hosted backend, database server, heavy application framework, and custom platform extractors.
 
@@ -123,6 +123,18 @@ These constraints keep the first release focused on reliable, safe single-video 
 - Expanded accessibility verification.
 - Additional platforms only after a separate technical evaluation.
 
+## Run a portable build
+
+The portable build does not require installing .NET or running an installer:
+
+1. Extract the complete `Vidora-0.1.0-win-x64.zip` archive to a folder you can write to. Do not run Vidora from inside the ZIP.
+2. Open the extracted folder and run `Vidora.exe`.
+3. Keep the `tools` and `licenses` folders beside `Vidora.exe`; they contain the bundled download tools and notices.
+
+The archive includes the .NET runtime, yt-dlp, and FFmpeg. Internet access is needed to discover and download videos and to update yt-dlp. Settings, history, and logs are stored under `%LOCALAPPDATA%\Vidora` and remain after deleting the extracted app folder. To remove that data too, delete `%LOCALAPPDATA%\Vidora`.
+
+The project can generate this archive locally using the command below. It is not yet approved for public redistribution; see the release gates above.
+
 ## Build from source
 
 Requires .NET SDK 10.0.401 or a compatible latest patch of .NET 10 and Windows 11 x64 with the Windows desktop workload.
@@ -134,7 +146,7 @@ dotnet test Vidora.sln -c Release --no-build
 dotnet run --project src/Vidora/Vidora.csproj -c Release
 ```
 
-The application downloads the official yt-dlp executable at runtime and verifies its release checksum. FFmpeg must be available at the expected app tools path for media operations. No installer or portable ZIP is currently approved for distribution.
+When running from source, the application downloads the official yt-dlp executable at runtime and verifies its release checksum. FFmpeg must be available at the expected app tools path for media operations.
 
 To generate a local portable ZIP from the verified binaries already installed on this machine, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-portable-zip.ps1`. The archive is written under ignored `artifacts/portable/`. It includes GPLv3 FFmpeg; do not publicly redistribute this locally generated archive until complete corresponding source and all applicable notices are included.
 

@@ -55,7 +55,10 @@ This locally generated archive does not include all corresponding source and bui
 $readme = @'
 # Vidora portable (Windows x64)
 
-Run `Vidora.exe`. The first launch copies the bundled yt-dlp into `%LOCALAPPDATA%\Vidora\tools` so later updates can be installed without modifying this extracted folder. Queue, settings, history, logs, and temporary files are stored under `%LOCALAPPDATA%\Vidora`.
+1. Extract the complete ZIP archive to a folder you can write to. Do not run the app from inside the ZIP.
+2. Run `Vidora.exe` from the extracted folder. Keep the `tools` and `licenses` folders beside it.
+
+The app includes the .NET runtime, yt-dlp, and FFmpeg. The first launch copies the bundled yt-dlp into `%LOCALAPPDATA%\Vidora\tools` so later updates do not modify this extracted folder. Queue, settings, history, logs, and temporary files are stored under `%LOCALAPPDATA%\Vidora`.
 
 Internet is required for video metadata/downloads and future yt-dlp updates. FFmpeg and yt-dlp are bundled at the versions recorded in `THIRD-PARTY-NOTICES.md`; see `licenses` for their notices.
 

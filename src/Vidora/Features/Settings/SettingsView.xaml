@@ -21,7 +21,7 @@
 
     <StackPanel MaxWidth="560">
         <TextBlock Margin="0,0,0,8"
-                   FontSize="28"
+                   FontSize="26"
                    FontWeight="SemiBold"
                    Text="{DynamicResource Settings.Title}" />
         <TextBlock Margin="0,0,0,24"
@@ -40,8 +40,8 @@
         <TextBlock x:Name="PersistenceRecoveryWarning"
                    Margin="0,0,0,16"
                    Padding="12"
-                   Background="#FFFFF4CE"
-                   Foreground="#FF7A4E00"
+                   Background="{DynamicResource Warning.BackgroundBrush}"
+                   Foreground="{DynamicResource Warning.ForegroundBrush}"
                    Text="{DynamicResource Settings.PersistenceRecoveryWarning}"
                    TextWrapping="Wrap">
             <TextBlock.Style>
@@ -56,7 +56,7 @@
             </TextBlock.Style>
         </TextBlock>
 
-        <Border Margin="0,0,0,12" Padding="16" BorderBrush="#FFD1D5DB" BorderThickness="1" CornerRadius="8">
+        <Border Margin="0,0,0,12" Padding="16" BorderBrush="{DynamicResource Border.Brush}" BorderThickness="1" CornerRadius="12">
             <StackPanel DataContext="{Binding Report.YtDlp}">
                 <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource Dependency.YtDlp}" />
                 <TextBlock Margin="0,4,0,0" Style="{StaticResource DependencyStatusStyle}" />
@@ -80,7 +80,7 @@
                     Command="{Binding UpdateYtDlpCommand}" />
             <TextBlock x:Name="UpdateRecoveryText"
                        Margin="0,8,0,0"
-                       Foreground="DarkOrange"
+                       Foreground="{DynamicResource Warning.ForegroundBrush}"
                        Text="{DynamicResource Dependency.UpdateRecovery}"
                        TextWrapping="Wrap">
                 <TextBlock.Style>
@@ -96,7 +96,7 @@
             </TextBlock>
         </StackPanel>
 
-        <Border Margin="0,0,0,16" Padding="16" BorderBrush="#FFD1D5DB" BorderThickness="1" CornerRadius="8">
+        <Border Margin="0,0,0,16" Padding="16" BorderBrush="{DynamicResource Border.Brush}" BorderThickness="1" CornerRadius="12">
             <StackPanel DataContext="{Binding Report.Ffmpeg}">
                 <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource Dependency.Ffmpeg}" />
                 <TextBlock Margin="0,4,0,0" Style="{StaticResource DependencyStatusStyle}" />

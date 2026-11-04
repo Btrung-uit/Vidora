@@ -120,7 +120,14 @@ public sealed class DownloadService(
             }
 
             var reportedPath = Volatile.Read(ref finalPath);
-            if (string.IsNullOrWhiteSpace(reportedPath) || !Path.IsPathRooted(reportedPath))
+            if (string.IsNullOrWhiteSpace(reportedPath) ||
+                !Path.IsPathRooted(reportedPath) ||
+                !File.Exists(reportedPath))
+            {
+                reportedPath = FindFinalOutputPath(destination, baseName);
+            }
+
+            if (string.IsNullOrWhiteSpace(reportedPath))
             {
                 throw MissingFinalPath();
             }
@@ -179,6 +186,20 @@ public sealed class DownloadService(
                relative != ".." &&
                !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
                !relative.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal);
+    }
+
+    private static string? FindFinalOutputPath(string destination, string baseName)
+    {
+        var prefix = baseName + ".";
+        var candidates = Directory.EnumerateFiles(destination)
+            .Where(path => Path.GetFileName(path).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .Where(path =>
+                !path.EndsWith(".part", StringComparison.OrdinalIgnoreCase) &&
+                !path.EndsWith(".ytdl", StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToArray();
+
+        return candidates.Length == 1 ? candidates[0] : null;
     }
 
     private static VidoraException MissingFinalPath() => new(new VidoraError(
