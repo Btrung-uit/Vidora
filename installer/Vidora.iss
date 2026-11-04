@@ -4,20 +4,29 @@
 #ifndef FfmpegDir
   #define FfmpegDir "..\artifacts\approved-ffmpeg"
 #endif
+#ifndef AppVersion
+  #define AppVersion "0.1.0"
+#endif
+#ifndef FfmpegSha256
+  #define FfmpegSha256 "UNAPPROVED"
+#endif
 
-#if !FileExists(FfmpegDir + "\ffmpeg.exe")
-  #error "A reviewed, pinned FFmpeg build is required. See THIRD-PARTY-NOTICES.md before packaging."
+#if FfmpegSha256 == "UNAPPROVED" || !FileExists(FfmpegDir + "\ffmpeg.exe")
+  #error "A reviewed FFmpeg build and its pinned SHA-256 are required. See THIRD-PARTY-NOTICES.md before packaging."
+#endif
+#if LowerCase(GetSHA256OfFile(FfmpegDir + "\ffmpeg.exe")) != LowerCase(FfmpegSha256)
+  #error "The FFmpeg executable does not match the SHA-256 reviewed for this release."
 #endif
 
 [Setup]
 AppId={{8B2B4D7D-4A1A-4A19-A5C5-6F82B5C83A10}
 AppName=Vidora
-AppVersion=0.1.0
+AppVersion={#AppVersion}
 DefaultDirName={localappdata}\Programs\Vidora
 DefaultGroupName=Vidora
 PrivilegesRequired=lowest
 OutputDir=..\artifacts\installer
-OutputBaseFilename=Vidora-Setup-0.1.0-win-x64
+OutputBaseFilename=Vidora-Setup-{#AppVersion}-win-x64
 ArchitecturesInstallIn64BitMode=x64
 UninstallDisplayIcon={app}\Vidora.exe
 LicenseFile=..\LICENSE

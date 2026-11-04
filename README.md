@@ -1,6 +1,6 @@
 # Vidora
 
-Vidora is a local-first Windows desktop application for downloading publicly accessible videos from YouTube, Facebook, Instagram, and TikTok without relying on unstable third-party downloader websites.
+Vidora is a local-first Windows desktop application for discovering and downloading publicly accessible videos with yt-dlp. YouTube, Facebook, Instagram, and TikTok are intended sources; individual platform support remains subject to the dated release checks below.
 
 > **Project status (2026-11-04):** MVP implementation and automated tests are present. A distributable release is not ready: the FFmpeg Windows build has not been selected or audited, and clean-machine/platform acceptance checks are pending. See [release checklist](docs/release-checklist.md) and [platform test matrix](docs/platform-test-matrix.md).
 
