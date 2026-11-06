@@ -165,7 +165,7 @@ public sealed class MainWindowViewModelTests
 
         public Task CancelActiveAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task<bool> RemovePendingAsync(Guid taskId, CancellationToken cancellationToken) => Task.FromResult(false);
+        public Task<bool> RemoveAsync(Guid taskId, CancellationToken cancellationToken) => Task.FromResult(false);
 
         public Task PersistInterruptedAsync(Guid taskId, DownloadResult result, CancellationToken cancellationToken) =>
             Task.CompletedTask;

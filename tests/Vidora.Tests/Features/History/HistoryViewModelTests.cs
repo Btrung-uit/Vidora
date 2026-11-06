@@ -473,7 +473,7 @@ public sealed class HistoryViewModelTests
 
         public Task CancelActiveAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task<bool> RemovePendingAsync(Guid taskId, CancellationToken cancellationToken) =>
+        public Task<bool> RemoveAsync(Guid taskId, CancellationToken cancellationToken) =>
             Task.FromResult(false);
 
         public Task PersistInterruptedAsync(

@@ -33,6 +33,22 @@ public sealed class DownloadViewModelQueueTests
     }
 
     [TestMethod]
+    [DataRow(DownloadStatus.Pending, true)]
+    [DataRow(DownloadStatus.Failed, true)]
+    [DataRow(DownloadStatus.Downloading, false)]
+    [DataRow(DownloadStatus.Completed, false)]
+    [DataRow(DownloadStatus.Cancelled, false)]
+    [DataRow(DownloadStatus.Interrupted, false)]
+    public void RemoveCommand_OnlyPendingAndFailedItemsCanBeRemoved(DownloadStatus status, bool expected)
+    {
+        var viewModel = CreateViewModel(new FakeQueueService(), new FakeSettingsService(new AppSettings(null)));
+        var item = new DownloadQueueItem(Request(Guid.NewGuid(), @"C:\Videos"), status, null, null, null, 1, false);
+
+        Assert.AreEqual(expected, viewModel.RemoveCommand.CanExecute(item));
+        Assert.IsFalse(viewModel.RemoveCommand.CanExecute(null));
+    }
+
+    [TestMethod]
     public async Task InitializeAsync_ExistingLastDestination_RestoresSelection()
     {
         using var directory = new TemporaryDirectory();
@@ -223,7 +239,7 @@ public sealed class DownloadViewModelQueueTests
 
         public Task CancelActiveAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task<bool> RemovePendingAsync(Guid taskId, CancellationToken cancellationToken) =>
+        public Task<bool> RemoveAsync(Guid taskId, CancellationToken cancellationToken) =>
             Task.FromResult(false);
 
         public Task PersistInterruptedAsync(

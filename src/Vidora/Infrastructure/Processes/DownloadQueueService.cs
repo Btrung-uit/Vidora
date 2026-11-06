@@ -152,21 +152,33 @@ public sealed class DownloadQueueService(
         }
     }
 
-    public async Task<bool> RemovePendingAsync(Guid taskId, CancellationToken cancellationToken)
+    public async Task<bool> RemoveAsync(Guid taskId, CancellationToken cancellationToken)
     {
         await mutationGate.WaitAsync(cancellationToken);
         try
         {
+            DownloadQueueItem? candidate;
             lock (sync)
             {
-                var index = items.FindIndex(item =>
-                    item.Request.Id == taskId && item.Status == DownloadStatus.Pending);
-                if (index < 0)
-                {
-                    return false;
-                }
+                candidate = items.FirstOrDefault(item =>
+                    item.Request.Id == taskId &&
+                    item.Status is DownloadStatus.Pending or DownloadStatus.Failed);
+            }
 
-                items.RemoveAt(index);
+            if (candidate is null)
+            {
+                return false;
+            }
+
+            if (candidate.Status == DownloadStatus.Failed && !candidate.IsHistoryRecorded &&
+                !await TryRecordHistoryAsync(candidate, cancellationToken))
+            {
+                return false;
+            }
+
+            lock (sync)
+            {
+                items.RemoveAll(item => item.Request.Id == taskId);
             }
 
             await SaveCurrentAsync(cancellationToken);

@@ -348,7 +348,7 @@
                                             Margin="12,0,0,0"
                                             Padding="10,4"
                                             VerticalAlignment="Center"
-                                            Command="{Binding DataContext.RemovePendingCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                             CommandParameter="{Binding}"
                                             Content="{DynamicResource Queue.Remove}" />
                                 </Grid>

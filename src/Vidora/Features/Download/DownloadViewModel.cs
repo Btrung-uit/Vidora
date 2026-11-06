@@ -223,9 +223,12 @@ public partial class DownloadViewModel : ObservableObject
     private Task ResumeQueueAsync(CancellationToken cancellationToken) =>
         queueService.ResumeAsync(cancellationToken);
 
-    [RelayCommand]
-    private Task RemovePendingAsync(DownloadQueueItem item, CancellationToken cancellationToken) =>
-        queueService.RemovePendingAsync(item.Request.Id, cancellationToken);
+    private static bool CanRemove(DownloadQueueItem? item) =>
+        item?.Status is DownloadStatus.Pending or DownloadStatus.Failed;
+
+    [RelayCommand(CanExecute = nameof(CanRemove))]
+    private Task RemoveAsync(DownloadQueueItem item, CancellationToken cancellationToken) =>
+        queueService.RemoveAsync(item.Request.Id, cancellationToken);
 
     private void QueueService_Changed(object? sender, EventArgs e)
     {
