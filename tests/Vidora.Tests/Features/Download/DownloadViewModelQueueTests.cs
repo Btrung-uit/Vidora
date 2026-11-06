@@ -159,6 +159,22 @@ public sealed class DownloadViewModelQueueTests
 
     [STATestMethod]
     [DoNotParallelize]
+    public void DownloadView_QualityLabels_PreservePresetSelectionBothWays()
+    {
+        var viewModel = CreateViewModel(new FakeQueueService(), new FakeSettingsService(new AppSettings(null)));
+        var view = CreateView(viewModel, 700, 600);
+        var selector = (ComboBox)view.FindName("QualitySelector");
+        Assert.AreEqual("Tốt nhất", ((ComboBoxItem)selector.SelectedItem).Content);
+        selector.SelectedValue = QualityPreset.P480;
+        Assert.AreEqual(QualityPreset.P480, viewModel.SelectedQuality);
+        Assert.AreEqual("480p", ((ComboBoxItem)selector.SelectedItem).Content);
+        viewModel.SelectedQuality = QualityPreset.P1080;
+        view.UpdateLayout();
+        Assert.AreEqual("1080p", ((ComboBoxItem)selector.SelectedItem).Content);
+    }
+
+    [STATestMethod]
+    [DoNotParallelize]
     public void DownloadView_QueuedItem_RendersQueueAndResumeAction()
     {
         var queue = new FakeQueueService();

@@ -34,6 +34,16 @@ Online video downloaders are often unreliable, filled with intrusive ads, or req
 - Show completion and failure notifications.
 - Provide actionable errors without exposing sensitive diagnostic data.
 
+## Output file names
+
+Downloaded files use a readable title capped at 80 characters (before extension),
+shortened at word boundaries. Facebook/TikTok captions lose leading engagement
+counts and hashtags and use the first sentence; Instagram's generic "Video by"
+titles become "Instagram - author". Platform/media IDs are used only when no usable
+title exists. Existing names get numbered suffixes, such as `Video (2).mp4`, without
+overwriting files. Full source titles and URLs remain in history. Existing files
+are not renamed by this change.
+
 ## Local-first architecture
 
 ```text

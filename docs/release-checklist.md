@@ -16,8 +16,8 @@ Existing older full portable ZIPs under artifacts are not releasable.
 ## Owner gates
 
 - [ ] Complete [hands-on acceptance](manual-release-acceptance.md) on clean Windows 11 x64 without .NET SDK, using the extracted ZIP.
-- [ ] Record dated video samples and tool versions in [platform matrix](platform-test-matrix.md). No four-platform claim until all four pass, or the owner explicitly narrows release scope.
-- [ ] Decide the release name after checking existing uses of Vidora. An existing app-store product uses the name; this is a collision, not a trademark determination.
+- [x] Owner supplied dated sample download/playback results for all four platforms and tool versions in [platform matrix](platform-test-matrix.md). This validates those samples in the tested candidate, not every URL or subsequent builds.
+- [x] Owner explicitly retained the name Vidora on 2026-11-06 after being informed of an existing app-store product using it. This records the naming decision, not trademark clearance.
 - [ ] Review/merge the implementation PR. Build/use CI for the final approved commit.
 - [ ] Review release notes, platform scope and limitations, then explicitly approve a GitHub prerelease with that exact ZIP/checksum.
 

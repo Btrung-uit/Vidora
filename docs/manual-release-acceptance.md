@@ -45,6 +45,8 @@ lượng cần ghép hình/tiếng khi nguồn cung cấp. Không commit media v
 
 ## 5. Quyết định của bạn
 
+Đã chốt ngày 2026-11-06: chủ dự án giữ tên **Vidora** sau khi biết có sản phẩm khác trùng tên; đây không phải xác nhận quyền nhãn hiệu.
+
 - Chốt tên: đã có [Vidora trên App Store](https://apps.apple.com/us/app/vidora-ai-video-generator/id6748969599).
   Đây là phát hiện trùng tên, chưa phải kết luận nhãn hiệu. Nếu đổi tên, làm trước
   tag/installer identity; không chỉ đổi tên ZIP.
