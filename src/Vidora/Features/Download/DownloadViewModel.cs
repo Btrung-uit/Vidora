@@ -98,8 +98,6 @@ public partial class DownloadViewModel : ObservableObject
     [ObservableProperty]
     public partial string QueueOperationErrorKey { get; private set; } = "Queue.PersistenceFailed";
 
-    public IReadOnlyList<QualityPreset> QualityPresets { get; } = Enum.GetValues<QualityPreset>();
-
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
         var settings = await settingsService.LoadAsync(cancellationToken);

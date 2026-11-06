@@ -157,7 +157,7 @@ public sealed class DownloadServiceTests
         var outputIndex = captured.Arguments.ToList().IndexOf("--output");
         var outputTemplate = captured.Arguments[outputIndex + 1];
         Assert.IsFalse(Path.IsPathRooted(outputTemplate));
-        StringAssert.StartsWith(outputTemplate, "Video Việt [YouTube-abc123]");
+        StringAssert.StartsWith(outputTemplate, "Video Việt");
         StringAssert.EndsWith(outputTemplate, ".%(ext)s");
 
         var progressIndex = captured.Arguments.ToList().IndexOf("--progress-template");
@@ -201,7 +201,7 @@ public sealed class DownloadServiceTests
         var outputIndex = captured.Arguments.ToList().IndexOf("--output");
         var outputTemplate = captured.Arguments[outputIndex + 1];
         Assert.AreEqual(
-            "100% %(title)s [YouTube-abc123]".Replace("%", "%%", StringComparison.Ordinal) + ".%(ext)s",
+            "100% %(title)s".Replace("%", "%%", StringComparison.Ordinal) + ".%(ext)s",
             outputTemplate);
     }
 

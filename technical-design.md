@@ -344,14 +344,16 @@ public sealed record DownloadRequest(
 Template logic:
 
 ```text
-<sanitized-title> [<platform>-<media-id>].<actual-extension>
+<short-readable-title>.<actual-extension>
 ```
 
 - Ưu tiên để `yt-dlp` sanitize filename với chế độ tương thích Windows.
 - Giữ extension thực tế từ final path; không đổi extension bằng tay.
 - Không ghi đè: bật chính sách no-overwrite và kiểm tra collision trước khi start.
 - Nếu vẫn collision, thêm ` (2)`, ` (3)`... trước extension.
-- Giới hạn basename để toàn đường dẫn nằm trong giới hạn an toàn của API/file tooling được dùng.
+- Giới hạn basename 80 ký tự, cắt theo từ và không tách text element Unicode.
+- Facebook/TikTok bỏ số tương tác đầu caption, hashtag và lấy câu đầu; Instagram đổi `Video by author` thành `Instagram - author`.
+- Chỉ dùng `<platform> - <media-id>` khi không có tiêu đề dùng được. Metadata/lịch sử vẫn giữ tiêu đề và URL gốc; không đổi tên file đã tồn tại.
 
 ### Ownership của file tạm
 

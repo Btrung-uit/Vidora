@@ -7,9 +7,11 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              d:DesignHeight="520"
              d:DesignWidth="700"
+             Language="vi-VN"
              mc:Ignorable="d">
     <UserControl.Resources>
         <download:ResourceKeyConverter x:Key="ResourceKeyConverter" />
+        <download:TransferValueConverter x:Key="TransferValueConverter" />
     </UserControl.Resources>
     <ScrollViewer x:Name="DownloadScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
     <Grid MinHeight="480" Height="{Binding ActualHeight, ElementName=DownloadScrollViewer}">
@@ -113,17 +115,22 @@
                         <TextBlock FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Metadata.Title}" />
                         <TextBlock Margin="0,10,0,0" Text="{Binding Metadata.Author}" />
                         <TextBlock Margin="0,6,0,0" Text="{Binding Metadata.Platform}" />
-                        <TextBlock Margin="0,6,0,0" Text="{Binding Metadata.Duration}" />
+                        <TextBlock Margin="0,6,0,0" Text="{Binding Metadata.Duration, Converter={StaticResource TransferValueConverter}, ConverterParameter=Duration}" />
                         <TextBlock Margin="0,14,0,4" Text="{DynamicResource Download.Quality}" />
-                        <ComboBox ItemsSource="{Binding QualityPresets}"
-                                  SelectedItem="{Binding SelectedQuality}" />
+                        <ComboBox x:Name="QualitySelector" AutomationProperties.Name="{DynamicResource Download.Quality}"
+                                  SelectedValuePath="Tag" SelectedValue="{Binding SelectedQuality}">
+                            <ComboBoxItem Content="{DynamicResource Quality.Best}" Tag="{x:Static models:QualityPreset.Best}" />
+                            <ComboBoxItem Content="{DynamicResource Quality.1080}" Tag="{x:Static models:QualityPreset.P1080}" />
+                            <ComboBoxItem Content="{DynamicResource Quality.720}" Tag="{x:Static models:QualityPreset.P720}" />
+                            <ComboBoxItem Content="{DynamicResource Quality.480}" Tag="{x:Static models:QualityPreset.P480}" />
+                        </ComboBox>
                         <TextBlock Margin="0,12,0,4" Text="{DynamicResource Download.Destination}" />
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBox IsReadOnly="True" Text="{Binding DestinationDirectory}" />
+                            <TextBox IsReadOnly="True" Text="{Binding DestinationDirectory}" AutomationProperties.Name="{DynamicResource Download.Destination}" />
                             <Button Grid.Column="1"
                                     Margin="8,0,0,0"
                                     Padding="12,4"
@@ -267,11 +274,11 @@
                              AutomationProperties.Name="{DynamicResource Download.Progress}" />
                 <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
                     <TextBlock Text="{DynamicResource Download.Bytes}" />
-                    <TextBlock Margin="4,0,12,0" Text="{Binding Progress.DownloadedBytes}" />
+                    <TextBlock Margin="4,0,12,0" Text="{Binding Progress.DownloadedBytes, Converter={StaticResource TransferValueConverter}, ConverterParameter=Bytes}" />
                     <TextBlock Text="{DynamicResource Download.Speed}" />
-                    <TextBlock Margin="4,0,12,0" Text="{Binding Progress.BytesPerSecond}" />
+                    <TextBlock Margin="4,0,12,0" Text="{Binding Progress.BytesPerSecond, Converter={StaticResource TransferValueConverter}, ConverterParameter=Speed}" />
                     <TextBlock Text="{DynamicResource Download.Eta}" />
-                    <TextBlock Margin="4,0,0,0" Text="{Binding Progress.Eta}" />
+                    <TextBlock Margin="4,0,0,0" Text="{Binding Progress.Eta, Converter={StaticResource TransferValueConverter}, ConverterParameter=Duration}" />
                 </StackPanel>
                 <Button x:Name="CancelActiveDownloadButton"
                         Margin="0,8,0,0"

@@ -17,7 +17,7 @@ public sealed class OutputNamePolicyTests
             VideoPlatform.YouTube,
             "abc123");
 
-        Assert.AreEqual("Tiêu đề Việt [YouTube-abc123]", result);
+        Assert.AreEqual("Tiêu đề Việt", result);
     }
 
     [TestMethod]
@@ -31,7 +31,7 @@ public sealed class OutputNamePolicyTests
             VideoPlatform.YouTube,
             "abc123");
 
-        Assert.AreEqual("A B [YouTube-abc123]", result);
+        Assert.AreEqual("A B", result);
     }
 
     [TestMethod]
@@ -45,11 +45,11 @@ public sealed class OutputNamePolicyTests
             VideoPlatform.YouTube,
             "abc123");
 
-        Assert.AreEqual("_CON [YouTube-abc123]", result);
+        Assert.AreEqual("_CON", result);
     }
 
     [TestMethod]
-    public void CreateAvailableBaseName_LongTitle_IsShortenedAndKeepsIdentitySuffix()
+    public void CreateAvailableBaseName_LongTitle_IsShortenedWithoutIdentitySuffix()
     {
         using var directory = new TemporaryDirectory();
 
@@ -59,8 +59,8 @@ public sealed class OutputNamePolicyTests
             VideoPlatform.Instagram,
             "media-id");
 
-        Assert.IsLessThanOrEqualTo(120, result.Length);
-        StringAssert.EndsWith(result, " [Instagram-media-id]");
+        Assert.IsLessThanOrEqualTo(80, result.Length);
+        Assert.IsFalse(result.Contains("media-id", StringComparison.Ordinal));
     }
 
     [TestMethod]
@@ -70,19 +70,19 @@ public sealed class OutputNamePolicyTests
 
         var result = OutputNamePolicy.CreateAvailableBaseName(
             directory.Path,
-            "Video",
+            "",
             VideoPlatform.YouTube,
             new string('x', 300));
 
-        Assert.IsLessThanOrEqualTo(120, result.Length);
-        StringAssert.StartsWith(result, "Video [YouTube-");
+        Assert.IsLessThanOrEqualTo(80, result.Length);
+        StringAssert.StartsWith(result, "YouTube - ");
     }
 
     [TestMethod]
     public void CreateAvailableBaseName_ExistingExtensions_AddsNextCollisionSuffix()
     {
         using var directory = new TemporaryDirectory();
-        const string original = "Video [YouTube-abc123]";
+        const string original = "Video";
         File.WriteAllBytes(Path.Combine(directory.Path, $"{original}.mp4"), []);
         File.WriteAllBytes(Path.Combine(directory.Path, $"{original} (2).webm"), []);
 
@@ -92,7 +92,32 @@ public sealed class OutputNamePolicyTests
             VideoPlatform.YouTube,
             "abc123");
 
-        Assert.AreEqual("Video [YouTube-abc123] (3)", result);
+        Assert.AreEqual("Video (3)", result);
+    }
+
+    [TestMethod]
+    [DataRow(VideoPlatform.TikTok, "Bài viết lộ là do AI viết ở cách dựng bài. Mình đã biến nghiên cứu tr", "Bài viết lộ là do AI viết ở cách dựng bài")]
+    [DataRow(VideoPlatform.Facebook, "266K views · 8.5K reactions Đang mải chụp ảnh thì... #ToanThayDat #thptqg Toán thầy Đạt - ch", "Đang mải chụp ảnh thì")]
+    [DataRow(VideoPlatform.Instagram, "Video by farkin_around", "Instagram - farkin_around")]
+    public void CreateAvailableBaseName_SocialCaption_UsesReadableShortTitle(VideoPlatform platform, string title, string expected)
+    {
+        using var directory = new TemporaryDirectory();
+        Assert.AreEqual(expected, OutputNamePolicy.CreateAvailableBaseName(directory.Path, title, platform, "123"));
+    }
+
+    [TestMethod]
+    public void CreateAvailableBaseName_LongWordsAndEmoji_PreserveTextElementsAndCollisionLimit()
+    {
+        using var directory = new TemporaryDirectory();
+        var title = string.Concat(Enumerable.Repeat("Video 👩‍💻 tiếng Việt ", 15));
+        var first = OutputNamePolicy.CreateAvailableBaseName(directory.Path, title, VideoPlatform.YouTube, "one");
+        File.WriteAllText(Path.Combine(directory.Path, first + ".mp4"), "keep");
+        var second = OutputNamePolicy.CreateAvailableBaseName(directory.Path, title, VideoPlatform.YouTube, "two");
+        Assert.IsLessThanOrEqualTo(80, first.Length);
+        Assert.IsLessThanOrEqualTo(80, second.Length);
+        Assert.IsFalse(char.IsHighSurrogate(first[^1]));
+        StringAssert.EndsWith(second, " (2)");
+        Assert.AreEqual("keep", File.ReadAllText(Path.Combine(directory.Path, first + ".mp4")));
     }
 
     private sealed class TemporaryDirectory : IDisposable

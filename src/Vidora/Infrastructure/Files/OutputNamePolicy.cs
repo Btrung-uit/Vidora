@@ -1,12 +1,14 @@
 using System.IO;
 using System.Text;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using Vidora.Core.Models;
 
 namespace Vidora.Infrastructure.Files;
 
 public static class OutputNamePolicy
 {
-    private const int MaximumBaseNameLength = 120;
+    private const int MaximumBaseNameLength = 80;
     private static readonly HashSet<string> ReservedNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "CON", "PRN", "AUX", "NUL",
@@ -20,36 +22,53 @@ public static class OutputNamePolicy
         VideoPlatform platform,
         string mediaId)
     {
-        var safeTitle = Sanitize(title, "Video");
-        if (ReservedNames.Contains(safeTitle.Split('.')[0]))
+        if (platform is VideoPlatform.Facebook or VideoPlatform.TikTok)
         {
-            safeTitle = $"_{safeTitle}";
+            title = Regex.Replace(title,
+                @"^\s*(?:[\d.,]+\s*[KMB]?\s+(?:views?|reactions?|likes?|comments?|shares?)\s*[·|•–—-]?\s*)+",
+                string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            title = Regex.Replace(title, @"(?:^|\s)#[\p{L}\p{N}_]+", string.Empty);
+            var sentenceEnd = Regex.Match(title, @"[.!?](?:\s|$)");
+            if (sentenceEnd.Success) title = title[..sentenceEnd.Index];
         }
 
-        var safeId = Sanitize(mediaId, "unknown");
-        var maximumIdLength = Math.Min(
-            48,
-            Math.Max(1, MaximumBaseNameLength - 1 - $" [{platform}-]".Length));
-        if (safeId.Length > maximumIdLength)
+        if (platform == VideoPlatform.Instagram && title.StartsWith("Video by ", StringComparison.OrdinalIgnoreCase))
         {
-            safeId = safeId[..maximumIdLength];
+            title = "Instagram - " + title["Video by ".Length..];
         }
 
-        var identity = $" [{platform}-{safeId}]";
+        var safeTitle = Sanitize(title, string.Empty);
+        if (safeTitle.Length == 0) safeTitle = $"{platform} - {Shorten(Sanitize(mediaId, "unknown"), 48)}";
+        if (ReservedNames.Contains(safeTitle.Split('.')[0].TrimEnd())) safeTitle = "_" + safeTitle;
+
         for (var collision = 1; ; collision++)
         {
             var collisionSuffix = collision == 1 ? string.Empty : $" ({collision})";
-            var titleLimit = Math.Max(1, MaximumBaseNameLength - identity.Length - collisionSuffix.Length);
-            var shortenedTitle = safeTitle.Length > titleLimit
-                ? safeTitle[..titleLimit].TrimEnd(' ', '.')
-                : safeTitle;
-            var candidate = $"{shortenedTitle}{identity}{collisionSuffix}";
+            var shortenedTitle = Shorten(safeTitle, MaximumBaseNameLength - collisionSuffix.Length);
+            if (ReservedNames.Contains(shortenedTitle.Split('.')[0].TrimEnd())) shortenedTitle = "_" + shortenedTitle;
+            var candidate = shortenedTitle + collisionSuffix;
 
             if (!HasCollision(destinationDirectory, candidate))
             {
                 return candidate;
             }
         }
+    }
+
+    private static string Shorten(string text, int limit)
+    {
+        if (text.Length <= limit) return text;
+        var end = 0;
+        foreach (var index in StringInfo.ParseCombiningCharacters(text))
+        {
+            if (index > limit) break;
+            end = index;
+        }
+        var prefix = text[..end];
+        var wordEnd = prefix.LastIndexOf(' ');
+        if (end > 0 && text[end] != ' ' && prefix[^1] != ' ' && wordEnd > 0)
+            prefix = prefix[..wordEnd];
+        return prefix.Length == 0 ? "Video" : prefix.TrimEnd(' ', '.');
     }
 
     private static string Sanitize(string value, string fallback)
