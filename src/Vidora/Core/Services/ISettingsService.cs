@@ -4,6 +4,8 @@ namespace Vidora.Core.Services;
 
 public interface ISettingsService
 {
+    Task UpdateAsync(Func<AppSettings, AppSettings> update, CancellationToken cancellationToken);
+
     Task<AppSettings> LoadAsync(CancellationToken cancellationToken);
 
     Task SaveAsync(AppSettings settings, CancellationToken cancellationToken);

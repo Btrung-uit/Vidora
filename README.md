@@ -2,7 +2,7 @@
 
 Vidora is a local-first Windows desktop application for discovering and downloading publicly accessible videos with yt-dlp. YouTube, Facebook, Instagram, and TikTok are intended sources; individual platform support remains subject to the dated release checks below.
 
-> **Project status (2026-11-05):** MVP implementation and automated tests are present, and a local portable ZIP can be generated. Public redistribution is not approved yet: complete FFmpeg corresponding-source materials and clean-machine/platform acceptance checks are still pending. See [release checklist](docs/release-checklist.md) and [platform test matrix](docs/platform-test-matrix.md).
+> **Project status (2026-11-06):** Preparing a slim Windows prerelease. CI verifies code and builds a self-contained candidate without FFmpeg or yt-dlp. Users install yt-dlp through Settings and select an independently installed FFmpeg executable. Clean-machine/platform acceptance and the release-name decision remain pending; no public release is approved yet. See [release checklist](docs/release-checklist.md) and [hands-on acceptance](docs/manual-release-acceptance.md).
 
 ## Why Vidora?
 
@@ -161,9 +161,10 @@ The portable build does not require installing .NET or running an installer:
 
 1. Extract the complete `Vidora-0.1.0-win-x64.zip` archive to a folder you can write to. Do not run Vidora from inside the ZIP.
 2. Open the extracted folder and run `Vidora.exe`.
-3. Keep the `tools` and `licenses` folders beside `Vidora.exe`; they contain the bundled download tools and notices.
+3. Keep the `licenses` folder and other extracted files beside `Vidora.exe`.
+4. In Settings, explicitly install yt-dlp, then select `ffmpeg.exe` from your separately installed FFmpeg. Use the Windows build providers linked by [FFmpeg](https://ffmpeg.org/download.html). Keep its installation folder in place.
 
-The archive includes the .NET runtime, yt-dlp, and FFmpeg. Internet access is needed to discover and download videos and to update yt-dlp. Settings, history, and logs are stored under `%LOCALAPPDATA%\Vidora` and remain after deleting the extracted app folder. To remove that data too, delete `%LOCALAPPDATA%\Vidora`.
+The slim archive includes the .NET runtime, but no yt-dlp or FFmpeg binary. Internet access is needed to install/update yt-dlp and discover/download videos. Settings (including the FFmpeg path), history, and logs are stored under `%LOCALAPPDATA%\Vidora` and remain after deleting the extracted app folder. To remove that data too, delete `%LOCALAPPDATA%\Vidora`.
 
 The project can generate this archive locally using the command below. It is not yet approved for public redistribution; see the release gates above.
 
@@ -178,9 +179,9 @@ dotnet test Vidora.sln -c Release --no-build
 dotnet run --project src/Vidora/Vidora.csproj -c Release
 ```
 
-When running from source, the application downloads the official yt-dlp executable at runtime and verifies its release checksum. FFmpeg must be available at the expected app tools path for media operations.
+In Settings, install the official yt-dlp executable (verified against its release checksum) and choose your FFmpeg executable. Changing FFmpeg validates it before saving; invalid files leave the previous configuration intact. Light/Dark/System follow Windows app preferences; High Contrast takes precedence.
 
-To generate a local portable ZIP from the verified binaries already installed on this machine, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-portable-zip.ps1`. The archive is written under ignored `artifacts/portable/`. It includes GPLv3 FFmpeg; do not publicly redistribute this locally generated archive until complete corresponding source and all applicable notices are included.
+To create a slim candidate from a clean checkout, use PowerShell 7: `pwsh -NoProfile -File scripts/build-portable-zip.ps1 -Version 0.1.0-beta.1`. The archive and SHA-256 are written under ignored `artifacts/portable/`; choose a new output directory when rebuilding. The package includes runtime/toolkit licenses and a file-hash manifest tied to the source commit. Dirty source is rejected unless `-AllowDirty` is explicitly used for local testing; dirty candidates are not releasable.
 
 ## Documentation
 
@@ -192,4 +193,4 @@ The implementation sequence and evidence are tracked in [the MVP plan](docs/supe
 
 Vidora is intended for content that users own, are authorized to download, or are otherwise permitted to use. It will not bypass DRM or access controls. Users are responsible for following applicable laws, copyright requirements, and platform terms.
 
-Third-party terms and the FFmpeg packaging gate are recorded in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Vidora does not bundle an unaudited FFmpeg build. No claim is made that every URL from a listed platform will always work; release support requires a passing dated sample in the platform matrix.
+Third-party terms are recorded in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Slim packages do not redistribute FFmpeg or yt-dlp. No claim is made that every URL from a listed platform will always work; release support requires a passing dated sample in the platform matrix. CI candidates are verification artifacts, not approved GitHub Releases.

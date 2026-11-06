@@ -253,6 +253,8 @@ public sealed class YtDlpDiscoveryParserTests
 
     private sealed class FakeDependencyService(DependencyReport report) : IDependencyService
     {
+        public Task<DependencyComponentReport> CheckFfmpegAsync(string path, CancellationToken token) => throw new NotSupportedException();
+
         public Task<DependencyReport> CheckAsync(CancellationToken cancellationToken) => Task.FromResult(report);
 
         public Task<string> GetLatestYtDlpVersionAsync(CancellationToken cancellationToken) =>

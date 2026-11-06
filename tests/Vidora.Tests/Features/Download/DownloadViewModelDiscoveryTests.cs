@@ -108,11 +108,12 @@ public sealed class DownloadViewModelDiscoveryTests
     public async Task CopyDiagnosticCommand_DiscoveryFailure_CopiesRedactedStableFields()
     {
         var copied = new List<string>();
+        var profilePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var error = new VidoraError(
             VidoraErrorCode.NetworkFailure,
             "Error.NetworkFailure",
             "Action.TryAgain",
-            "https://example.test/?token=secret C:\\Users\\acer\\file",
+            $"https://example.test/?token=secret {System.IO.Path.Combine(profilePath, "file")}",
             true);
         var viewModel = CreateViewModel(
             new FakeDiscoveryService((_, _) => Task.FromException<VideoMetadata>(new VidoraException(error))),
@@ -129,7 +130,7 @@ public sealed class DownloadViewModelDiscoveryTests
         StringAssert.Contains(diagnostic, "token=[REDACTED]");
         StringAssert.Contains(diagnostic, "%USERPROFILE%");
         Assert.IsFalse(diagnostic.Contains("secret", StringComparison.Ordinal));
-        Assert.IsFalse(diagnostic.Contains(@"C:\Users\acer", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(diagnostic.Contains(profilePath, StringComparison.OrdinalIgnoreCase));
     }
 
     [TestMethod]
@@ -261,6 +262,9 @@ public sealed class DownloadViewModelDiscoveryTests
     {
         public Task<AppSettings> LoadAsync(CancellationToken cancellationToken) =>
             Task.FromResult(new AppSettings(null));
+
+        public async Task UpdateAsync(Func<AppSettings, AppSettings> update, CancellationToken ct) =>
+            await SaveAsync(update(await LoadAsync(ct)), ct);
 
         public Task SaveAsync(AppSettings settings, CancellationToken cancellationToken) => Task.CompletedTask;
     }

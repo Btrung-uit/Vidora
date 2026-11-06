@@ -34,6 +34,8 @@ public sealed class SettingsViewModelPersistenceTests
 
     private sealed class StubDependencyService : IDependencyService
     {
+        public Task<DependencyComponentReport> CheckFfmpegAsync(string path, CancellationToken token) => throw new NotSupportedException();
+
         public Task<DependencyReport> CheckAsync(CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 

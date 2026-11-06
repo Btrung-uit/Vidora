@@ -140,6 +140,8 @@ public sealed class MainWindowViewModelTests
 
     private sealed class StubDependencyService : IDependencyService
     {
+        public Task<DependencyComponentReport> CheckFfmpegAsync(string path, CancellationToken token) => throw new NotSupportedException();
+
         public Task<DependencyReport> CheckAsync(CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
@@ -186,6 +188,9 @@ public sealed class MainWindowViewModelTests
     {
         public Task<AppSettings> LoadAsync(CancellationToken cancellationToken) =>
             Task.FromResult(new AppSettings(null));
+
+        public async Task UpdateAsync(Func<AppSettings, AppSettings> update, CancellationToken ct) =>
+            await SaveAsync(update(await LoadAsync(ct)), ct);
 
         public Task SaveAsync(AppSettings settings, CancellationToken cancellationToken) => Task.CompletedTask;
     }

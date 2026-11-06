@@ -7,6 +7,7 @@ public sealed class SettingsStore : ISettingsService
 {
     private const int SchemaVersion = 1;
     private readonly AtomicJsonStore<SettingsDocument> store;
+    private readonly SemaphoreSlim mutationGate = new(1, 1);
 
     public SettingsStore(string filePath, TimeProvider timeProvider)
     {
@@ -26,6 +27,30 @@ public sealed class SettingsStore : ISettingsService
         return result.Document.Settings;
     }
 
-    public Task SaveAsync(AppSettings settings, CancellationToken cancellationToken) =>
-        store.SaveAsync(new SettingsDocument(SchemaVersion, settings), cancellationToken);
+    public async Task SaveAsync(AppSettings settings, CancellationToken cancellationToken)
+    {
+        await mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            await store.SaveAsync(new SettingsDocument(SchemaVersion, settings), cancellationToken);
+        }
+        finally
+        {
+            mutationGate.Release();
+        }
+    }
+
+    public async Task UpdateAsync(Func<AppSettings, AppSettings> update, CancellationToken cancellationToken)
+    {
+        await mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            var settings = await LoadAsync(cancellationToken);
+            await store.SaveAsync(new SettingsDocument(SchemaVersion, update(settings)), cancellationToken);
+        }
+        finally
+        {
+            mutationGate.Release();
+        }
+    }
 }

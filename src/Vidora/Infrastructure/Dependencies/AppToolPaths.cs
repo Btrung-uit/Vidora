@@ -6,6 +6,9 @@ public sealed record AppToolPaths(
     string YtDlpPath,
     string FfmpegPath)
 {
+    // Shared by dependency checks and downloads so an explicit settings change applies immediately.
+    public string FfmpegPath { get; set; } = FfmpegPath;
+
     public static AppToolPaths CreateDefault(
         string? applicationBaseDirectory = null,
         string? localAppDataDirectory = null)

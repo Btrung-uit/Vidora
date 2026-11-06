@@ -181,6 +181,8 @@ public sealed class SettingsViewModelUpdateTests
 
         public Exception? LatestException { get; init; }
 
+        public Task<DependencyComponentReport> CheckFfmpegAsync(string path, CancellationToken token) => throw new NotSupportedException();
+
         public Task<DependencyReport> CheckAsync(CancellationToken cancellationToken) =>
             Task.FromResult(checkReport);
 

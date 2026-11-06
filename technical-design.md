@@ -6,6 +6,13 @@
 
 **Ngày:** 2026-10-30
 
+**Cập nhật phân phối 2026-11-06:** Chủ dự án chọn bản gọn trước. Quyết định này
+thay thế phương án đóng gói FFmpeg bên dưới: ZIP/installer chỉ kèm .NET runtime và
+license; yt-dlp được cài rõ ràng từ Cài đặt, người dùng chọn FFmpeg bên ngoài.
+Đường dẫn FFmpeg được kiểm tra trước khi áp dụng và lưu bằng trường tùy chọn
+`FfmpegPath` trong settings schema 1. Portable ZIP là artifact đầu tiên; installer
+chỉ phát hành sau khi biên dịch và kiểm thử riêng. Xem `docs/release-checklist.md`.
+
 **Phạm vi:** MVP desktop local cho YouTube, Facebook, Instagram và TikTok
 
 ## 0. Mục tiêu và nguyên tắc
@@ -77,10 +84,10 @@ Các nguyên tắc chi phối thiết kế:
 
 ### FFmpeg
 
-- Installer đóng gói một build FFmpeg x64 đã pin phiên bản và ghi rõ nguồn, cấu hình license và checksum.
+- Bản gọn không đóng gói FFmpeg. Người dùng chọn executable đã cài; service kiểm tra `-version` trước khi lưu cấu hình và dùng ngay cho lượt tải tiếp theo.
 - Vidora chỉ gọi executable như một process riêng; không link thư viện FFmpeg vào ứng dụng.
 - Không tự update FFmpeg trong MVP.
-- Release gate bắt buộc: kèm license, attribution và nghĩa vụ phân phối tương ứng với build được chọn trong `THIRD-PARTY-NOTICES.md`.
+- Nếu sau này đóng gói FFmpeg, bắt buộc đánh giá lại build, source và giấy phép; không dùng binary của máy phát triển để thêm trực tiếp vào gói.
 - `DependencyService` kiểm tra sự tồn tại và chạy `ffmpeg -version` trước khi cho tải.
 
 ### Trạng thái dependency
@@ -488,7 +495,7 @@ Một nền tảng không tải thành công sẽ chặn claim hỗ trợ bốn 
 
 ### Distribution
 
-- Installer là artifact chính; portable ZIP là artifact phụ.
+- Portable ZIP bản gọn là artifact đầu tiên. Installer tùy chọn, phải qua kiểm thử riêng trước khi phát hành.
 - Mỗi artifact có SHA-256 checksum.
 - Release chứa `LICENSE`, `THIRD-PARTY-NOTICES.md`, supported OS và hướng dẫn gỡ cài đặt/xóa local data.
 - Trước public release, kiểm tra tên “Vidora” trên GitHub, package registries và các nhãn hiệu liên quan; nếu có xung đột đáng kể, đổi tên trước khi tạo installer identity.

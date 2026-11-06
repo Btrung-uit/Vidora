@@ -21,11 +21,7 @@ public sealed class DependencyService(
             ["--version"],
             ParseYtDlpVersion,
             cancellationToken);
-        var ffmpegTask = CheckComponentAsync(
-            toolPaths.FfmpegPath,
-            ["-version"],
-            ParseFfmpegVersion,
-            cancellationToken);
+        var ffmpegTask = CheckFfmpegAsync(toolPaths.FfmpegPath, cancellationToken);
 
         await Task.WhenAll(ytDlpTask, ffmpegTask);
         return new DependencyReport(await ytDlpTask, await ffmpegTask);
@@ -33,6 +29,9 @@ public sealed class DependencyService(
 
     public async Task<string> GetLatestYtDlpVersionAsync(CancellationToken cancellationToken) =>
         (await releaseClient.GetLatestAsync(cancellationToken)).Version;
+
+    public Task<DependencyComponentReport> CheckFfmpegAsync(string executablePath, CancellationToken cancellationToken) =>
+        CheckComponentAsync(executablePath, ["-version"], ParseFfmpegVersion, cancellationToken);
 
     public async Task<DependencyReport> UpdateYtDlpAsync(CancellationToken cancellationToken)
     {
