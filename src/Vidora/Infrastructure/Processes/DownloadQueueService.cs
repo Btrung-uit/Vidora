@@ -192,6 +192,82 @@ public sealed class DownloadQueueService(
         return true;
     }
 
+    public async Task<bool> RetryAsync(Guid taskId, CancellationToken cancellationToken)
+    {
+        await mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            DownloadQueueItem? failed;
+            lock (sync)
+            {
+                failed = items.FirstOrDefault(item => item.Request.Id == taskId && item.Status == DownloadStatus.Failed);
+            }
+
+            if (failed is null || (!failed.IsHistoryRecorded && !await TryRecordHistoryAsync(failed, cancellationToken)))
+            {
+                return false;
+            }
+
+            var pending = failed with { Status = DownloadStatus.Pending, Progress = null, FinalPath = null, Error = null, IsHistoryRecorded = false };
+            DownloadQueueItem[] snapshot;
+            lock (sync)
+            {
+                snapshot = items.Select(item => item.Request.Id == taskId ? pending : item).ToArray();
+            }
+
+            await queueStore.SaveAsync(snapshot, cancellationToken);
+            lock (sync)
+            {
+                items[items.FindIndex(item => item.Request.Id == taskId)] = pending;
+                paused = false;
+            }
+        }
+        finally
+        {
+            mutationGate.Release();
+        }
+
+        RaiseChanged();
+        StartProcessorIfNeeded();
+        return true;
+    }
+
+    public async Task<bool> ClearFinishedAsync(CancellationToken cancellationToken)
+    {
+        await mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (!await ReconcileHistoryAsync(cancellationToken))
+            {
+                return false;
+            }
+
+            DownloadQueueItem[] remaining;
+            lock (sync)
+            {
+                if (!items.Any(item => IsTerminal(item.Status)))
+                {
+                    return false;
+                }
+
+                remaining = items.Where(item => !IsTerminal(item.Status)).ToArray();
+            }
+
+            await queueStore.SaveAsync(remaining, cancellationToken);
+            lock (sync)
+            {
+                items.RemoveAll(item => IsTerminal(item.Status));
+            }
+        }
+        finally
+        {
+            mutationGate.Release();
+        }
+
+        RaiseChanged();
+        return true;
+    }
+
     public async Task PersistInterruptedAsync(
         Guid taskId,
         DownloadResult result,

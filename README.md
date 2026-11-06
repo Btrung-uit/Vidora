@@ -22,9 +22,14 @@ Online video downloaders are often unreliable, filled with intrusive ads, or req
 - Track progress, speed, downloaded size, and estimated time remaining.
 - Cancel active downloads and clean up Vidora-owned temporary files safely.
 - Queue multiple videos and process one item at a time.
+- Retry failed items directly in the queue, preserving previous history attempts.
+- Open completed files or their folders directly from the queue.
+- Clear finished queue entries without deleting downloaded files or history.
 - Restore pending queue items after restarting the application.
 - Keep a local download history with retry and open-file actions.
+- Search history by title or URL and combine status and missing-file filters.
 - Detect missing dependencies and update `yt-dlp` safely.
+- Guide first-time setup with conditional tool instructions and checking/update status.
 - Support light, dark, and system themes.
 - Show completion and failure notifications.
 - Provide actionable errors without exposing sensitive diagnostic data.

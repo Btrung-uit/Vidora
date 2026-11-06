@@ -20,6 +20,10 @@ public interface IDownloadQueueService
 
     Task<bool> RemoveAsync(Guid taskId, CancellationToken cancellationToken);
 
+    Task<bool> RetryAsync(Guid taskId, CancellationToken cancellationToken);
+
+    Task<bool> ClearFinishedAsync(CancellationToken cancellationToken);
+
     Task PersistInterruptedAsync(
         Guid taskId,
         DownloadResult result,

@@ -11,7 +11,8 @@
     <UserControl.Resources>
         <download:ResourceKeyConverter x:Key="ResourceKeyConverter" />
     </UserControl.Resources>
-    <Grid>
+    <ScrollViewer x:Name="DownloadScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <Grid MinHeight="480" Height="{Binding ActualHeight, ElementName=DownloadScrollViewer}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -241,6 +242,16 @@
         </ScrollViewer>
 
         <StackPanel Grid.Row="3" Margin="0,16,0,0">
+            <TextBlock Margin="0,0,0,8" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"
+                       Foreground="{DynamicResource Warning.ForegroundBrush}"
+                       Text="{Binding QueueOperationErrorKey, Converter={StaticResource ResourceKeyConverter}}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers><DataTrigger Binding="{Binding HasQueueOperationError}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <StackPanel x:Name="ActiveDownloadPanel" Margin="0,0,0,12">
                 <StackPanel.Style>
                     <Style TargetType="StackPanel">
@@ -269,14 +280,13 @@
                         Command="{Binding CancelDownloadCommand}"
                         Content="{DynamicResource Download.Cancel}" />
             </StackPanel>
-            <DockPanel LastChildFill="False" Margin="0,0,0,8">
-                <TextBlock VerticalAlignment="Center"
+            <WrapPanel Margin="0,0,0,8">
+                <TextBlock VerticalAlignment="Center" Margin="0,0,16,6"
                            FontSize="18"
                            FontWeight="SemiBold"
                            Text="{DynamicResource Queue.Title}" />
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button x:Name="StartDownloadButton"
-                            Margin="0,0,8,0"
+                            Margin="0,0,8,6"
                             Padding="12,4"
                             Command="{Binding StartDownloadCommand}"
                             Content="{DynamicResource Download.Start}">
@@ -292,6 +302,7 @@
                         </Button.Style>
                     </Button>
                     <Button x:Name="ResumeQueueButton"
+                            Margin="0,0,8,6"
                             Padding="12,4"
                             Command="{Binding ResumeQueueCommand}"
                             Content="{DynamicResource Queue.Resume}">
@@ -305,8 +316,10 @@
                             </Style>
                         </Button.Style>
                     </Button>
-                </StackPanel>
-            </DockPanel>
+                    <Button x:Name="ClearFinishedButton" Margin="0,0,0,6" Padding="12,4"
+                            Command="{Binding ClearFinishedCommand}" Content="{DynamicResource Queue.ClearFinished}"
+                            ToolTip="{DynamicResource Queue.ClearHint}" />
+            </WrapPanel>
             <ScrollViewer x:Name="QueueScrollViewer"
                           MaxHeight="140"
                           VerticalScrollBarVisibility="Auto">
@@ -319,15 +332,33 @@
                                     BorderThickness="1"
                                     CornerRadius="12">
                                 <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
                                     <StackPanel>
-                                        <TextBlock FontWeight="SemiBold" Text="{Binding Request.Metadata.Title}" />
-                                        <TextBlock Margin="0,3,0,0" Text="{Binding Status}" />
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding Request.Metadata.Title}"
+                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Request.Metadata.Title}" />
+                                        <TextBlock Margin="0,3,0,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="{DynamicResource Queue.Status.Pending}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Downloading"><Setter Property="Text" Value="{DynamicResource Queue.Status.Downloading}" /></DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Completed"><Setter Property="Text" Value="{DynamicResource History.Status.Completed}" /></DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Failed"><Setter Property="Text" Value="{DynamicResource History.Status.Failed}" /></DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Cancelled"><Setter Property="Text" Value="{DynamicResource History.Status.Cancelled}" /></DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Interrupted"><Setter Property="Text" Value="{DynamicResource History.Status.Interrupted}" /></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Margin="0,3,0,0" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource Warning.ForegroundBrush}"
+                                                   Text="{Binding Error.UserMessageKey, Converter={StaticResource ResourceKeyConverter}}" />
                                         <TextBlock Margin="0,3,0,0"
                                                    Foreground="{DynamicResource Text.SecondaryBrush}"
+                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Request.DestinationDirectory}"
                                                    Text="{Binding Request.DestinationDirectory}" />
                                         <TextBlock Margin="0,3,0,0"
                                                    Foreground="{DynamicResource Warning.ForegroundBrush}"
@@ -344,13 +375,44 @@
                                             </TextBlock.Style>
                                         </TextBlock>
                                     </StackPanel>
-                                    <Button Grid.Column="1"
-                                            Margin="12,0,0,0"
+                                    <WrapPanel Grid.Row="1" Margin="0,8,0,0">
+                                        <Button x:Name="RetryQueueItemButton" Margin="0,0,8,4" Padding="10,4"
+                                                Command="{Binding DataContext.RetryQueueItemCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}" Content="{DynamicResource Queue.Retry}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers><DataTrigger Binding="{Binding Status}" Value="Failed"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button x:Name="OpenQueueFileButton" Margin="0,0,8,4" Padding="10,4"
+                                                Command="{Binding DataContext.OpenQueueFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}" Content="{DynamicResource History.OpenFile}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers><DataTrigger Binding="{Binding Status}" Value="Completed"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Margin="0,0,8,4" Padding="10,4"
+                                                Command="{Binding DataContext.OpenQueueFolderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}" Content="{DynamicResource History.OpenFolder}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers><DataTrigger Binding="{Binding Status}" Value="Completed"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    <Button Margin="0,0,0,4"
                                             Padding="10,4"
                                             VerticalAlignment="Center"
                                             Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                             CommandParameter="{Binding}"
                                             Content="{DynamicResource Queue.Remove}" />
+                                    </WrapPanel>
                                 </Grid>
                             </Border>
                         </DataTemplate>
@@ -359,4 +421,5 @@
             </ScrollViewer>
         </StackPanel>
     </Grid>
+    </ScrollViewer>
 </UserControl>

@@ -54,7 +54,31 @@
                 Background="{DynamicResource Content.BackgroundBrush}"
                 CornerRadius="12">
             <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Margin="0,0,0,16" Padding="12" CornerRadius="6"
+                        Background="{DynamicResource Warning.BackgroundBrush}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.NeedsSetup, ElementName=SettingsContent}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                                <DataTrigger Binding="{Binding CurrentPage}" Value="{x:Static shell:ShellPage.Settings}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <TextBlock Margin="0,0,12,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource Warning.ForegroundBrush}" Text="{DynamicResource Dependency.SetupBanner}" />
+                        <Button Grid.Column="1" Command="{Binding NavigateCommand}" CommandParameter="{x:Static shell:ShellPage.Settings}"
+                                Content="{DynamicResource Dependency.OpenSettings}" />
+                    </Grid>
+                </Border>
                 <download:DownloadView x:Name="DownloadContent"
+                                       Grid.Row="1"
                                        Foreground="{DynamicResource Text.PrimaryBrush}">
                     <download:DownloadView.Style>
                         <Style TargetType="download:DownloadView">
@@ -73,6 +97,7 @@
                 </download:DownloadView>
 
                 <history:HistoryView x:Name="HistoryContent"
+                                     Grid.Row="1"
                                      Foreground="{DynamicResource Text.PrimaryBrush}">
                     <history:HistoryView.Style>
                         <Style TargetType="history:HistoryView">
@@ -88,6 +113,7 @@
                 </history:HistoryView>
 
                 <settings:SettingsView x:Name="SettingsContent"
+                                       Grid.Row="1"
                                        Foreground="{DynamicResource Text.PrimaryBrush}">
                     <settings:SettingsView.Style>
                         <Style TargetType="settings:SettingsView">

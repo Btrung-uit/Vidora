@@ -193,6 +193,10 @@ public sealed class DownloadViewModelDownloadTests
         public Task<bool> RemoveAsync(Guid taskId, CancellationToken cancellationToken) =>
             Task.FromResult(false);
 
+        public Task<bool> RetryAsync(Guid taskId, CancellationToken cancellationToken) => Task.FromResult(false);
+
+        public Task<bool> ClearFinishedAsync(CancellationToken cancellationToken) => Task.FromResult(false);
+
         public Task PersistInterruptedAsync(
             Guid taskId,
             DownloadResult result,

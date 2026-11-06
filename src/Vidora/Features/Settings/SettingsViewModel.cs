@@ -54,6 +54,7 @@ public partial class SettingsViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsReady))]
     [NotifyPropertyChangedFor(nameof(IsUpdateAvailable))]
+    [NotifyPropertyChangedFor(nameof(NeedsSetup), nameof(NeedsYtDlpSetup), nameof(NeedsFfmpegSetup))]
     [NotifyCanExecuteChangedFor(nameof(UpdateYtDlpCommand))]
     public partial DependencyReport? Report { get; private set; }
 
@@ -76,6 +77,12 @@ public partial class SettingsViewModel(
     public partial bool HasUpdateError { get; private set; }
 
     public bool IsReady => Report?.IsReady == true;
+
+    public bool NeedsSetup => Report is not null && !Report.IsReady;
+
+    public bool NeedsYtDlpSetup => Report is not null && Report.YtDlp.Status != DependencyStatus.Ready;
+
+    public bool NeedsFfmpegSetup => Report is not null && Report.Ffmpeg.Status != DependencyStatus.Ready;
 
     public bool IsUpdateAvailable =>
         LatestYtDlpVersion is not null &&

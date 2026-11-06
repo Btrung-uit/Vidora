@@ -20,7 +20,35 @@ public partial class HistoryViewModel(
     private bool subscribedToQueue;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VisibleItems), nameof(HasNoMatchingItems))]
     public partial IReadOnlyList<HistoryItemViewModel> Items { get; private set; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VisibleItems), nameof(HasNoMatchingItems))]
+    public partial string SearchText { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VisibleItems), nameof(HasNoMatchingItems))]
+    public partial DownloadStatus? SelectedStatus { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VisibleItems), nameof(HasNoMatchingItems))]
+    public partial bool MissingFilesOnly { get; set; }
+
+    public IReadOnlyList<HistoryItemViewModel> VisibleItems
+    {
+        get
+        {
+            var query = SearchText.Trim();
+            return Items.Where(row =>
+                (SelectedStatus is null || row.Item.Status == SelectedStatus) &&
+                (!MissingFilesOnly || row.IsMissing) &&
+                (query.Length == 0 || row.Item.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                 row.Item.SourceUrl.AbsoluteUri.Contains(query, StringComparison.OrdinalIgnoreCase))).ToArray();
+        }
+    }
+
+    public bool HasNoMatchingItems => Items.Count > 0 && VisibleItems.Count == 0;
 
     [ObservableProperty]
     public partial bool HasPersistenceError { get; private set; }
@@ -49,6 +77,8 @@ public partial class HistoryViewModel(
 
         OpenFileCommand.NotifyCanExecuteChanged();
         OpenFolderCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(VisibleItems));
+        OnPropertyChanged(nameof(HasNoMatchingItems));
     }
 
     [RelayCommand(CanExecute = nameof(CanOpenFile))]
