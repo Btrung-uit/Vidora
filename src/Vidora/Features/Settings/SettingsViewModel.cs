@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using System.IO;
+using System.ComponentModel;
 using Vidora.Core.Models;
 using Vidora.Core.Services;
 
@@ -9,9 +11,11 @@ public partial class SettingsViewModel(
     IDependencyService dependencyService,
     bool hasPersistenceRecoveryWarning = false,
     ISettingsService? settingsService = null,
-    IThemeService? themeService = null) : ObservableObject
+    IThemeService? themeService = null,
+    Action<string?>? configureFfmpegPath = null) : ObservableObject
 {
-    private AppSettings appSettings = new(null);
+    private readonly SemaphoreSlim settingsMutationGate = new(1, 1);
+    private bool initializing;
     public bool HasPersistenceRecoveryWarning { get; } = hasPersistenceRecoveryWarning;
 
     [ObservableProperty]
@@ -20,6 +24,22 @@ public partial class SettingsViewModel(
     [ObservableProperty]
     public partial bool NotificationsEnabled { get; set; } = true;
 
+    [ObservableProperty]
+    public partial string? FfmpegPath { get; private set; }
+
+    [ObservableProperty]
+    public partial bool HasFfmpegSelectionError { get; private set; }
+
+    [ObservableProperty]
+    public partial bool HasSettingsSaveError { get; private set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanChooseFfmpeg))]
+    [NotifyCanExecuteChangedFor(nameof(CheckDependenciesCommand), nameof(UpdateYtDlpCommand), nameof(SelectFfmpegCommand))]
+    public partial bool IsSelectingFfmpeg { get; private set; }
+
+    public bool CanChooseFfmpeg => !IsChecking && !IsUpdating && !IsSelectingFfmpeg;
+
     public async Task InitializeSettingsAsync(CancellationToken cancellationToken)
     {
         if (settingsService is null)
@@ -27,11 +47,25 @@ public partial class SettingsViewModel(
             return;
         }
 
-        var settings = await settingsService.LoadAsync(cancellationToken);
-        appSettings = settings;
-        Theme = settings.Theme;
-        NotificationsEnabled = settings.NotificationsEnabled;
-        themeService?.Apply(Theme);
+        initializing = true;
+        try
+        {
+            var settings = await settingsService.LoadAsync(cancellationToken);
+            FfmpegPath = settings.FfmpegPath;
+            if (FfmpegPath is not null && !Path.IsPathFullyQualified(FfmpegPath))
+            {
+                FfmpegPath = null;
+                HasFfmpegSelectionError = true;
+            }
+            configureFfmpegPath?.Invoke(FfmpegPath);
+            Theme = settings.Theme;
+            NotificationsEnabled = settings.NotificationsEnabled;
+            themeService?.Apply(Theme);
+        }
+        finally
+        {
+            initializing = false;
+        }
     }
 
     partial void OnThemeChanged(string value)
@@ -44,10 +78,78 @@ public partial class SettingsViewModel(
 
     private async Task SaveSettingsAsync()
     {
-        if (settingsService is not null)
+        if (settingsService is not null && !initializing)
         {
-            appSettings = appSettings with { Theme = Theme, NotificationsEnabled = NotificationsEnabled };
-            await settingsService.SaveAsync(appSettings, CancellationToken.None);
+            await settingsMutationGate.WaitAsync();
+            try
+            {
+                await settingsService.UpdateAsync(latest => latest with { Theme = Theme, NotificationsEnabled = NotificationsEnabled }, CancellationToken.None);
+                HasSettingsSaveError = false;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                HasSettingsSaveError = true;
+            }
+            finally
+            {
+                settingsMutationGate.Release();
+            }
+        }
+    }
+
+    private bool CanSelectFfmpeg(string? path) => CanChooseFfmpeg;
+
+    [RelayCommand(CanExecute = nameof(CanSelectFfmpeg))]
+    private async Task SelectFfmpegAsync(string? path, CancellationToken cancellationToken)
+    {
+        HasFfmpegSelectionError = true;
+        if (configureFfmpegPath is null || string.IsNullOrWhiteSpace(path) ||
+            !Path.IsPathFullyQualified(path) || !File.Exists(path))
+        {
+            return;
+        }
+
+        var previousPath = FfmpegPath;
+        var previousReport = Report;
+        IsSelectingFfmpeg = true;
+        var acquired = false;
+        try
+        {
+            await settingsMutationGate.WaitAsync(cancellationToken);
+            acquired = true;
+            var component = await dependencyService.CheckFfmpegAsync(path, cancellationToken);
+            if (component.Status != DependencyStatus.Ready)
+            {
+                return;
+            }
+
+            configureFfmpegPath(path);
+            var report = previousReport is null
+                ? await dependencyService.CheckAsync(cancellationToken)
+                : previousReport with { Ffmpeg = component };
+
+            if (settingsService is not null)
+            {
+                await settingsService.UpdateAsync(latest => latest with { FfmpegPath = path }, cancellationToken);
+            }
+
+            FfmpegPath = path;
+            Report = report;
+            HasFfmpegSelectionError = false;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or Win32Exception or InvalidOperationException)
+        {
+            HasFfmpegSelectionError = true;
+        }
+        finally
+        {
+            if (HasFfmpegSelectionError)
+            {
+                configureFfmpegPath(previousPath);
+                Report = previousReport;
+            }
+            if (acquired) settingsMutationGate.Release();
+            IsSelectingFfmpeg = false;
         }
     }
 
@@ -59,6 +161,8 @@ public partial class SettingsViewModel(
     public partial DependencyReport? Report { get; private set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanChooseFfmpeg))]
+    [NotifyCanExecuteChangedFor(nameof(SelectFfmpegCommand))]
     [NotifyCanExecuteChangedFor(nameof(CheckDependenciesCommand))]
     [NotifyCanExecuteChangedFor(nameof(UpdateYtDlpCommand))]
     public partial bool IsChecking { get; private set; }
@@ -69,6 +173,8 @@ public partial class SettingsViewModel(
     public partial string? LatestYtDlpVersion { get; private set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanChooseFfmpeg))]
+    [NotifyCanExecuteChangedFor(nameof(SelectFfmpegCommand))]
     [NotifyCanExecuteChangedFor(nameof(CheckDependenciesCommand))]
     [NotifyCanExecuteChangedFor(nameof(UpdateYtDlpCommand))]
     public partial bool IsUpdating { get; private set; }
@@ -88,7 +194,7 @@ public partial class SettingsViewModel(
         LatestYtDlpVersion is not null &&
         !string.Equals(Report?.YtDlp.Version, LatestYtDlpVersion, StringComparison.Ordinal);
 
-    private bool CanCheckDependencies() => !IsChecking && !IsUpdating;
+    private bool CanCheckDependencies() => CanChooseFfmpeg;
 
     [RelayCommand(CanExecute = nameof(CanCheckDependencies))]
     private async Task CheckDependenciesAsync(CancellationToken cancellationToken)
@@ -117,6 +223,7 @@ public partial class SettingsViewModel(
     private bool CanUpdateYtDlp() =>
         !IsChecking &&
         !IsUpdating &&
+        !IsSelectingFfmpeg &&
         IsUpdateAvailable;
 
     [RelayCommand(CanExecute = nameof(CanUpdateYtDlp))]

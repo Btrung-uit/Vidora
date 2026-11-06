@@ -125,6 +125,8 @@ public sealed class DependencyServiceTests
 
     private sealed class FakeDependencyService(Task<DependencyReport> reportTask) : IDependencyService
     {
+        public Task<DependencyComponentReport> CheckFfmpegAsync(string path, CancellationToken token) => throw new NotSupportedException();
+
         public Task<DependencyReport> CheckAsync(CancellationToken cancellationToken) => reportTask;
 
         public Task<string> GetLatestYtDlpVersionAsync(CancellationToken cancellationToken) =>

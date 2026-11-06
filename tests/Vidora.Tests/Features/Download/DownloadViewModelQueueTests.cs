@@ -349,6 +349,9 @@ public sealed class DownloadViewModelQueueTests
 
         public Task<AppSettings> LoadAsync(CancellationToken cancellationToken) => Task.FromResult(settings);
 
+        public async Task UpdateAsync(Func<AppSettings, AppSettings> update, CancellationToken ct) =>
+            await SaveAsync(update(await LoadAsync(ct)), ct);
+
         public Task SaveAsync(AppSettings value, CancellationToken cancellationToken)
         {
             Saved.Add(value);

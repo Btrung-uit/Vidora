@@ -105,6 +105,7 @@
     <system:String x:Key="Settings.Theme.Light">Sáng</system:String>
     <system:String x:Key="Settings.Theme.Dark">Tối</system:String>
     <system:String x:Key="Settings.Notifications">Thông báo khi tải xong hoặc thất bại</system:String>
+    <system:String x:Key="Settings.SaveFailed">Không thể lưu cài đặt. Kiểm tra dung lượng và quyền ghi rồi thử lại.</system:String>
     <system:String x:Key="Notification.Completed">Tải video hoàn tất.</system:String>
     <system:String x:Key="Notification.Failed">Tải video thất bại.</system:String>
     <system:String x:Key="Settings.PersistenceRecoveryWarning">Một file dữ liệu không thể đọc được. Vidora đã giữ lại file cũ khi có thể và khởi động với dữ liệu mặc định.</system:String>
@@ -113,7 +114,11 @@
     <system:String x:Key="Dependency.OpenSettings">Mở _Cài đặt</system:String>
     <system:String x:Key="Dependency.SetupIntro">Hoàn tất các bước bên dưới rồi bấm “Kiểm tra lại”. Vidora chỉ sẵn sàng khi cả hai công cụ đều hoạt động.</system:String>
     <system:String x:Key="Dependency.YtDlpSetup">Kết nối Internet, đợi kiểm tra phiên bản rồi bấm “Cài đặt hoặc cập nhật yt-dlp” bên dưới.</system:String>
-    <system:String x:Key="Dependency.FfmpegSetup">Giải nén lại đầy đủ gói Vidora và giữ thư mục tools\ffmpeg cạnh Vidora.exe, rồi bấm “Kiểm tra lại”. File ffmpeg.exe phải có trong thư mục này.</system:String>
+    <system:String x:Key="Dependency.FfmpegSetup">Bản gọn không kèm FFmpeg. Xem nguồn tải Windows tại ffmpeg.org/download.html, cài hoặc giải nén FFmpeg rồi bấm “Chọn ffmpeg.exe” bên dưới. Giữ nguyên thư mục FFmpeg sau khi chọn; Vidora sẽ kiểm tra công cụ và ghi nhớ đường dẫn.</system:String>
+    <system:String x:Key="Dependency.CheckingFfmpeg">Đang kiểm tra FFmpeg đã chọn…</system:String>
+    <system:String x:Key="Dependency.FfmpegPath">Đường dẫn FFmpeg đã chọn</system:String>
+    <system:String x:Key="Dependency.ChooseFfmpeg">_Chọn ffmpeg.exe</system:String>
+    <system:String x:Key="Dependency.FfmpegSelectionFailed">Không thể dùng hoặc lưu FFmpeg đã chọn. Hãy chọn ffmpeg.exe đang hoạt động và kiểm tra quyền ghi. Cấu hình trước đó được giữ nguyên.</system:String>
     <system:String x:Key="Dependency.Checking">Đang kiểm tra công cụ và phiên bản mới nhất…</system:String>
     <system:String x:Key="Dependency.Updating">Đang cài đặt hoặc cập nhật yt-dlp. Vui lòng đợi…</system:String>
     <system:String x:Key="Dependency.YtDlp">yt-dlp</system:String>

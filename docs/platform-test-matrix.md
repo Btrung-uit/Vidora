@@ -1,22 +1,31 @@
 # Platform test matrix
 
-Status date: 2026-11-04
+Status date: 2026-11-06. Distribution: slim Windows 11 x64 prerelease candidate.
+Local full suite: 275/275 passed. Exact build/candidate evidence is recorded by PR/CI.
+Automated checks do not substitute for the owner checks below.
 
-This is a release record, not a claim of completed manual testing. Automated checks were run with .NET SDK 10.0.401 on 2026-11-04. Release build: 0 warnings/0 errors; automated suite: 243/243 passed; self-contained `win-x64` publish succeeded and publish output contained no local data/test media. Inno Setup compiler was not installed, and no clean-machine installer, uninstall, accessibility, or real-platform sample run was performed.
+| Check | Evidence | Result |
+|---|---|---|
+| Full suite | Local SDK 10.0.401, 275/275 | Pass |
+| Theme / High Contrast | Injected Windows preference/SystemColors tests; OS unchanged | Pass (automated) |
+| External FFmpeg / rollback / legacy settings | Unit/persistence tests | Pass (automated) |
+| Slim guard / hashes / deterministic ZIP | PowerShell 7 self-checks; exact candidate CI evidence required | Automated |
+| Clean Windows 11 x64 first run without SDK | Owner acceptance pending | Not run |
+| yt-dlp install / external FFmpeg selection | Owner acceptance pending | Not run on clean machine |
+| Vietnamese/space paths, collision, no-write destination | Owner acceptance pending | Not run on clean machine |
+| Cancel/shutdown/restore/retry/clear/file preservation | Owner acceptance pending | Not run on clean machine |
+| Keyboard, DPI125%/150%, live theme/Contrast, Narrator | Owner acceptance pending | Not run on clean machine |
+| Installer compile/install/upgrade/uninstall | Optional; portable comes first | Not run |
 
-| Check | Environment/tool versions | Result | Evidence/notes |
-|---|---|---|---|
-| Self-contained win-x64 publish | .NET SDK 10.0.401 | Pass | `artifacts/publish/win-x64`; no local data/test media found |
-| Inno Setup installer compile | Compiler unavailable | Not run | Requires Inno Setup 7 and audited FFmpeg |
-| Clean Windows 11 x64 install/uninstall | Not run | Pending | Requires compiled installer |
-| First-run yt-dlp install and dependency versions | Not run | Pending | |
-| Vietnamese and paths containing spaces | Not run | Pending | |
-| Output collisions and unwritable destination | Not run | Pending | |
-| Cancel, shutdown, queue restore and corrupt persistence | Not run | Pending | |
-| Keyboard-only, 125%/150% scaling, High Contrast, screen reader | Not run | Pending | |
-| YouTube public sample | Not run | Pending | No support claim until passed |
-| Facebook public sample | Not run | Pending | No support claim until passed |
-| Instagram public sample | Not run | Pending | No support claim until passed |
-| TikTok public sample | Not run | Pending | No support claim until passed |
+## Real source samples
 
-Release decision: **blocked** pending FFmpeg redistribution audit and all manual acceptance checks above.
+| Platform | Public authorized sample URL | Date/time | yt-dlp / FFmpeg | Quality | Playable output/result |
+|---|---|---|---|---|---|
+| YouTube | Pending | — | — | — | Not run |
+| Facebook | Pending | — | — | — | Not run |
+| Instagram | Pending | — | — | — | Not run |
+| TikTok | Pending | — | — | — | Not run |
+
+No four-platform support claim until all four pass. Record real versions/failures;
+do not commit downloaded media, private logs or cookies. Release remains
+**pending owner acceptance**; see manual-release-acceptance.md.

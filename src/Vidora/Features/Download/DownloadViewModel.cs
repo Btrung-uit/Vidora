@@ -221,8 +221,8 @@ public partial class DownloadViewModel : ObservableObject
             cancellationToken);
         if (Directory.Exists(DestinationDirectory))
         {
-            var settings = await settingsService.LoadAsync(cancellationToken);
-            await settingsService.SaveAsync(settings with { LastDestinationDirectory = DestinationDirectory }, cancellationToken);
+            var destination = DestinationDirectory;
+            await settingsService.UpdateAsync(settings => settings with { LastDestinationDirectory = destination }, cancellationToken);
         }
     }
 

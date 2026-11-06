@@ -79,6 +79,7 @@ public partial class App : System.Windows.Application
             TimeProvider.System);
         ISettingsService settingsService = settingsStore;
         var themeService = new WpfThemeService(this);
+        Exit += (_, _) => themeService.Dispose();
         var notificationService = new WindowsNotificationService();
         Exit += (_, _) => notificationService.Dispose();
         await queueService.InitializeAsync(CancellationToken.None);
@@ -138,7 +139,10 @@ public partial class App : System.Windows.Application
             IsPersistenceRecovery(historyService.LastLoadStatus) ||
             IsPersistenceRecovery(settingsStore.LastLoadStatus),
             settingsService,
-            themeService);
+            themeService,
+            path => toolPaths.FfmpegPath = string.IsNullOrWhiteSpace(path)
+                ? Path.Combine(AppContext.BaseDirectory, "tools", "ffmpeg", "ffmpeg.exe")
+                : path);
         await settingsViewModel.InitializeSettingsAsync(CancellationToken.None);
         IAppShutdownCoordinator shutdownCoordinator = new AppShutdownCoordinator(
             activeDownloads,

@@ -219,6 +219,9 @@ public sealed class DownloadViewModelDownloadTests
         public Task<AppSettings> LoadAsync(CancellationToken cancellationToken) =>
             Task.FromResult(new AppSettings(null));
 
+        public async Task UpdateAsync(Func<AppSettings, AppSettings> update, CancellationToken ct) =>
+            await SaveAsync(update(await LoadAsync(ct)), ct);
+
         public Task SaveAsync(AppSettings settings, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }
