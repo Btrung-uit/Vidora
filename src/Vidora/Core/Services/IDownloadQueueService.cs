@@ -18,7 +18,11 @@ public interface IDownloadQueueService
 
     Task CancelActiveAsync(CancellationToken cancellationToken);
 
-    Task<bool> RemovePendingAsync(Guid taskId, CancellationToken cancellationToken);
+    Task<bool> RemoveAsync(Guid taskId, CancellationToken cancellationToken);
+
+    Task<bool> RetryAsync(Guid taskId, CancellationToken cancellationToken);
+
+    Task<bool> ClearFinishedAsync(CancellationToken cancellationToken);
 
     Task PersistInterruptedAsync(
         Guid taskId,

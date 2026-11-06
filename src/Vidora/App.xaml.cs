@@ -87,7 +87,8 @@ public partial class App : System.Windows.Application
             queueService,
             settingsService,
             TimeProvider.System,
-            copyText: System.Windows.Clipboard.SetText);
+            copyText: System.Windows.Clipboard.SetText,
+            openPath: path => Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }));
         await downloadViewModel.InitializeAsync(CancellationToken.None);
         var historyViewModel = new HistoryViewModel(
             historyService,

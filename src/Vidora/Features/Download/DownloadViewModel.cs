@@ -1,4 +1,5 @@
 using System.IO;
+using System.ComponentModel;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -24,6 +25,7 @@ public partial class DownloadViewModel : ObservableObject
     private readonly ISettingsService settingsService;
     private readonly TimeProvider timeProvider;
     private readonly Action<string> copyText;
+    private readonly Action<string> openPath;
     private readonly SynchronizationContext? uiContext;
     private CancellationTokenSource? activeDiscovery;
 
@@ -33,13 +35,15 @@ public partial class DownloadViewModel : ObservableObject
         ISettingsService settingsService,
         TimeProvider timeProvider,
         SynchronizationContext? uiContext = null,
-        Action<string>? copyText = null)
+        Action<string>? copyText = null,
+        Action<string>? openPath = null)
     {
         this.discoveryService = discoveryService;
         this.queueService = queueService;
         this.settingsService = settingsService;
         this.timeProvider = timeProvider;
         this.copyText = copyText ?? (_ => { });
+        this.openPath = openPath ?? (_ => { });
         this.uiContext = uiContext ?? SynchronizationContext.Current;
         queueService.Changed += QueueService_Changed;
         RefreshQueueProjection();
@@ -85,7 +89,14 @@ public partial class DownloadViewModel : ObservableObject
     public partial DownloadStatus? LastDownloadStatus { get; private set; }
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ClearFinishedCommand))]
     public partial IReadOnlyList<DownloadQueueItem> QueueItems { get; private set; } = [];
+
+    [ObservableProperty]
+    public partial bool HasQueueOperationError { get; private set; }
+
+    [ObservableProperty]
+    public partial string QueueOperationErrorKey { get; private set; } = "Queue.PersistenceFailed";
 
     public IReadOnlyList<QualityPreset> QualityPresets { get; } = Enum.GetValues<QualityPreset>();
 
@@ -223,9 +234,81 @@ public partial class DownloadViewModel : ObservableObject
     private Task ResumeQueueAsync(CancellationToken cancellationToken) =>
         queueService.ResumeAsync(cancellationToken);
 
-    [RelayCommand]
-    private Task RemovePendingAsync(DownloadQueueItem item, CancellationToken cancellationToken) =>
-        queueService.RemovePendingAsync(item.Request.Id, cancellationToken);
+    private static bool CanRemove(DownloadQueueItem? item) =>
+        item?.Status is DownloadStatus.Pending or DownloadStatus.Failed;
+
+    [RelayCommand(CanExecute = nameof(CanRemove))]
+    private Task RemoveAsync(DownloadQueueItem item, CancellationToken cancellationToken) =>
+        RunQueueOperationAsync(() => queueService.RemoveAsync(item.Request.Id, cancellationToken));
+
+    private static bool CanRetryQueueItem(DownloadQueueItem? item) => item?.Status == DownloadStatus.Failed;
+
+    [RelayCommand(CanExecute = nameof(CanRetryQueueItem))]
+    private Task RetryQueueItemAsync(DownloadQueueItem item, CancellationToken cancellationToken) =>
+        RunQueueOperationAsync(() => queueService.RetryAsync(item.Request.Id, cancellationToken));
+
+    private bool CanClearFinished() => QueueItems.Any(item => item.Status is
+        DownloadStatus.Completed or DownloadStatus.Failed or DownloadStatus.Cancelled or DownloadStatus.Interrupted);
+
+    [RelayCommand(CanExecute = nameof(CanClearFinished))]
+    private Task ClearFinishedAsync(CancellationToken cancellationToken) =>
+        RunQueueOperationAsync(() => queueService.ClearFinishedAsync(cancellationToken));
+
+    private async Task RunQueueOperationAsync(Func<Task<bool>> operation)
+    {
+        QueueOperationErrorKey = "Queue.PersistenceFailed";
+        try
+        {
+            HasQueueOperationError = !await operation();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            HasQueueOperationError = true;
+        }
+    }
+
+    private static bool CanOpenQueueFile(DownloadQueueItem? item) =>
+        item?.Status == DownloadStatus.Completed && item.FinalPath is { Length: > 0 } path && File.Exists(path);
+
+    [RelayCommand(CanExecute = nameof(CanOpenQueueFile))]
+    private void OpenQueueFile(DownloadQueueItem? item) =>
+        TryOpenQueuePath(CanOpenQueueFile(item) ? item!.FinalPath : null);
+
+    private static string? GetQueueFolder(DownloadQueueItem? item)
+    {
+        if (item?.Status != DownloadStatus.Completed)
+        {
+            return null;
+        }
+
+        var parent = string.IsNullOrWhiteSpace(item.FinalPath) ? null : Path.GetDirectoryName(item.FinalPath);
+        return parent is not null && Directory.Exists(parent) ? parent :
+            Directory.Exists(item.Request.DestinationDirectory) ? item.Request.DestinationDirectory : null;
+    }
+
+    private static bool CanOpenQueueFolder(DownloadQueueItem? item) => GetQueueFolder(item) is not null;
+
+    [RelayCommand(CanExecute = nameof(CanOpenQueueFolder))]
+    private void OpenQueueFolder(DownloadQueueItem? item) => TryOpenQueuePath(GetQueueFolder(item));
+
+    private void TryOpenQueuePath(string? path)
+    {
+        QueueOperationErrorKey = path is null ? "History.Missing" : "History.OperationFailed";
+        HasQueueOperationError = path is null;
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            openPath(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or Win32Exception)
+        {
+            HasQueueOperationError = true;
+        }
+    }
 
     private void QueueService_Changed(object? sender, EventArgs e)
     {
@@ -242,6 +325,8 @@ public partial class DownloadViewModel : ObservableObject
     {
         var snapshot = queueService.Items;
         QueueItems = snapshot;
+        OpenQueueFileCommand.NotifyCanExecuteChanged();
+        OpenQueueFolderCommand.NotifyCanExecuteChanged();
         var active = snapshot.FirstOrDefault(item => item.Status == DownloadStatus.Downloading);
         var latestTerminal = snapshot.LastOrDefault(item =>
             item.Status is not DownloadStatus.Pending and not DownloadStatus.Downloading);

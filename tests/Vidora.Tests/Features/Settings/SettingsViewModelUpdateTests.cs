@@ -10,6 +10,44 @@ namespace Vidora.Tests.Features.Settings;
 public sealed class SettingsViewModelUpdateTests
 {
     [TestMethod]
+    public async Task CheckDependencies_MissingTools_ExposesConditionalSetupGuidance()
+    {
+        var report = new DependencyReport(new(DependencyStatus.Missing, null), new(DependencyStatus.Invalid, null));
+        var viewModel = new SettingsViewModel(new FakeDependencyService(report, "2026.10.26", Report(DependencyStatus.Ready, "2026.10.26")));
+        Assert.IsFalse(viewModel.NeedsSetup);
+
+        await viewModel.CheckDependenciesCommand.ExecuteAsync(null);
+
+        Assert.IsTrue(viewModel.NeedsSetup);
+        Assert.IsTrue(viewModel.NeedsYtDlpSetup);
+        Assert.IsTrue(viewModel.NeedsFfmpegSetup);
+        await viewModel.UpdateYtDlpCommand.ExecuteAsync(null);
+        Assert.IsFalse(viewModel.NeedsSetup);
+    }
+
+    [STATestMethod]
+    [DoNotParallelize]
+    public void SettingsView_SmallHeight_AllSetupActionsRemainScrollable()
+    {
+        var view = new SettingsView();
+        view.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("/Vidora;component/Resources/Strings.vi-VN.xaml", UriKind.Relative)
+        });
+        view.Measure(new Size(480, 360));
+        view.Arrange(new Rect(0, 0, 480, 360));
+        view.UpdateLayout();
+
+        var scroll = view.FindName("SettingsScrollViewer") as ScrollViewer;
+        Assert.IsNotNull(scroll);
+        Assert.IsGreaterThan(0, scroll.ScrollableHeight);
+        scroll.ScrollToEnd();
+        view.UpdateLayout();
+        var check = (Button)view.FindName("CheckDependenciesButton");
+        Assert.IsTrue(check.TransformToAncestor(view).Transform(new Point()).Y < 360);
+    }
+
+    [TestMethod]
     public async Task CheckDependenciesCommand_ShowsInstalledAndLatestVersionWithoutUpdating()
     {
         var service = new FakeDependencyService(

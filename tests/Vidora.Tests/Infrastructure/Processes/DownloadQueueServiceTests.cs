@@ -74,7 +74,7 @@ public sealed class DownloadQueueServiceTests
     }
 
     [TestMethod]
-    public async Task RemovePendingAsync_ActiveAndPending_RemovesOnlyPending()
+    public async Task RemoveAsync_ActiveAndPending_RemovesOnlyPending()
     {
         using var context = new QueueTestContext();
         var completion = new TaskCompletionSource<DownloadResult>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -85,14 +85,177 @@ public sealed class DownloadQueueServiceTests
         await service.EnqueueAsync(pending, CancellationToken.None);
         await WaitUntilAsync(() => service.Items.Any(item => item.Status == DownloadStatus.Downloading));
 
-        var removedActive = await service.RemovePendingAsync(active.Id, CancellationToken.None);
-        var removedPending = await service.RemovePendingAsync(pending.Id, CancellationToken.None);
+        var removedActive = await service.RemoveAsync(active.Id, CancellationToken.None);
+        var removedPending = await service.RemoveAsync(pending.Id, CancellationToken.None);
 
         Assert.IsFalse(removedActive);
         Assert.IsTrue(removedPending);
         Assert.IsFalse(service.Items.Any(item => item.Request.Id == pending.Id));
         completion.SetResult(Completed(active));
         await WaitUntilAsync(() => service.Items.Single().Status == DownloadStatus.Completed);
+    }
+
+    [TestMethod]
+    public async Task RemoveAsync_FailedItem_RemovesPersistedQueueEntryAndKeepsHistory()
+    {
+        using var context = new QueueTestContext();
+        var request = Request("18181818-1818-1818-1818-181818181818");
+        await context.Store.SaveAsync(
+            [new DownloadQueueItem(request, DownloadStatus.Failed, null, null, Failed().Error, 1, false)],
+            CancellationToken.None);
+        var service = await context.CreateService((_, _, _) =>
+            throw new AssertFailedException("Removing a failed item must not restart it."));
+        var changes = 0;
+        service.Changed += (_, _) => changes++;
+
+        var removed = await service.RemoveAsync(request.Id, CancellationToken.None);
+
+        Assert.IsTrue(removed);
+        Assert.IsEmpty(service.Items);
+        Assert.IsEmpty(await context.Store.LoadAsync(CancellationToken.None));
+        Assert.AreEqual(request.Id, context.History.Items.Single().TaskId);
+        Assert.AreEqual(1, changes);
+    }
+
+    [TestMethod]
+    public async Task RemoveAsync_UnrecordedFailure_PreservesItemUntilHistoryCanBeSaved()
+    {
+        using var context = new QueueTestContext();
+        var request = Request("19191919-1919-1919-1919-191919191919");
+        await context.Store.SaveAsync(
+            [new DownloadQueueItem(request, DownloadStatus.Failed, null, null, Failed().Error, 1, false)],
+            CancellationToken.None);
+        context.History.FailAdds = true;
+        var service = await context.CreateService((_, _, _) =>
+            throw new AssertFailedException("Removing a failed item must not restart it."));
+
+        Assert.IsFalse(await service.RemoveAsync(request.Id, CancellationToken.None));
+        Assert.HasCount(1, service.Items);
+        Assert.HasCount(1, await context.Store.LoadAsync(CancellationToken.None));
+
+        context.History.FailAdds = false;
+        Assert.IsTrue(await service.RemoveAsync(request.Id, CancellationToken.None));
+        Assert.IsEmpty(service.Items);
+        Assert.AreEqual(request.Id, context.History.Items.Single().TaskId);
+        Assert.IsFalse(service.HasHistoryPersistenceError);
+    }
+
+    [TestMethod]
+    public async Task RetryAsync_FailedItem_PreservesHistoryAndRetriesWithNextAttempt()
+    {
+        using var context = new QueueTestContext();
+        var request = Request("20202020-2020-2020-2020-202020202020");
+        await context.Store.SaveAsync(
+            [new DownloadQueueItem(request, DownloadStatus.Failed, null, null, Failed().Error, 1, false)],
+            CancellationToken.None);
+        var calls = 0;
+        var service = await context.CreateService((retry, _, _) =>
+        {
+            calls++;
+            Assert.AreEqual(request.Id, retry.Id);
+            Assert.AreEqual(request.SourceUrl, retry.SourceUrl);
+            Assert.AreEqual(request.Quality, retry.Quality);
+            Assert.AreEqual(request.DestinationDirectory, retry.DestinationDirectory);
+            CollectionAssert.AreEqual(request.Metadata.Formats.ToArray(), retry.Metadata.Formats.ToArray());
+            return Task.FromResult(Completed(retry));
+        });
+
+        Assert.IsTrue(await service.RetryAsync(request.Id, CancellationToken.None));
+        await WaitUntilAsync(() => service.Items.Single().IsHistoryRecorded);
+
+        Assert.AreEqual(1, calls);
+        Assert.AreEqual(2, service.Items.Single().AttemptCount);
+        Assert.AreEqual(DownloadStatus.Completed, service.Items.Single().Status);
+        CollectionAssert.AreEqual(new[] { DownloadStatus.Failed, DownloadStatus.Completed },
+            context.History.Items.Select(item => item.Status).ToArray());
+        Assert.IsFalse(await service.RetryAsync(request.Id, CancellationToken.None));
+        Assert.IsFalse(await service.RetryAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task ClearFinishedAsync_MixedQueue_PreservesPendingAndHistoryAndOutputFile()
+    {
+        using var context = new QueueTestContext();
+        using var directory = new TemporaryDirectory("vidora-clear-queue-");
+        var output = Path.Combine(directory.Path, "video.mp4");
+        await File.WriteAllTextAsync(output, "keep");
+        var statuses = new[] { DownloadStatus.Completed, DownloadStatus.Failed, DownloadStatus.Cancelled, DownloadStatus.Interrupted, DownloadStatus.Pending };
+        var items = statuses.Select((status, index) => new DownloadQueueItem(
+            Request(new Guid(index + 1, 0, 0, new byte[8]).ToString()), status,
+            null, status == DownloadStatus.Completed ? output : null, null, 1, false)).ToArray();
+        await context.Store.SaveAsync(items, CancellationToken.None);
+        var service = await context.CreateService((_, _, _) =>
+            throw new AssertFailedException("Clearing must not resume the queue."));
+
+        Assert.IsTrue(await service.ClearFinishedAsync(CancellationToken.None));
+
+        Assert.AreEqual(DownloadStatus.Pending, service.Items.Single().Status);
+        Assert.AreEqual(DownloadStatus.Pending, (await context.Store.LoadAsync(CancellationToken.None)).Single().Status);
+        Assert.HasCount(4, context.History.Items);
+        Assert.AreEqual("keep", await File.ReadAllTextAsync(output));
+        Assert.IsFalse(await service.ClearFinishedAsync(CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task RetryAndClear_HistoryUnavailable_KeepUnrecordedFailure()
+    {
+        using var context = new QueueTestContext();
+        var request = Request("21212121-2121-2121-2121-212121212121");
+        await context.Store.SaveAsync(
+            [new DownloadQueueItem(request, DownloadStatus.Failed, null, null, Failed().Error, 1, false)],
+            CancellationToken.None);
+        context.History.FailAdds = true;
+        var service = await context.CreateService((_, _, _) =>
+            throw new AssertFailedException("Unrecorded history must be preserved."));
+
+        Assert.IsFalse(await service.RetryAsync(request.Id, CancellationToken.None));
+        Assert.IsFalse(await service.ClearFinishedAsync(CancellationToken.None));
+        Assert.AreEqual(DownloadStatus.Failed, service.Items.Single().Status);
+        Assert.HasCount(1, await context.Store.LoadAsync(CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task ClearFinishedAsync_ActiveDownload_DoesNotCancelOrRemoveIt()
+    {
+        using var context = new QueueTestContext();
+        var first = Request("22222222-1111-1111-1111-111111111111");
+        var active = Request("23232323-1111-1111-1111-111111111111");
+        await context.Store.SaveAsync([
+            new DownloadQueueItem(first, DownloadStatus.Failed, null, null, Failed().Error, 1, false),
+            new DownloadQueueItem(active, DownloadStatus.Pending, null, null, null, 0, false)
+        ], CancellationToken.None);
+        var completion = new TaskCompletionSource<DownloadResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = await context.CreateService((_, _, token) => completion.Task.WaitAsync(token));
+        await service.ResumeAsync(CancellationToken.None);
+        await WaitUntilAsync(() => service.Items.Any(item => item.Status == DownloadStatus.Downloading));
+
+        Assert.IsTrue(await service.ClearFinishedAsync(CancellationToken.None));
+        Assert.AreEqual(active.Id, service.Items.Single().Request.Id);
+        Assert.AreEqual(DownloadStatus.Downloading, service.Items.Single().Status);
+        completion.SetResult(Completed(active));
+        await WaitUntilAsync(() => service.Items.Single().IsHistoryRecorded);
+        Assert.AreEqual(DownloadStatus.Completed, service.Items.Single().Status);
+    }
+
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task RetryAndClear_QueueSaveFails_KeepPublishedState(bool retry)
+    {
+        var request = Request("24242424-1111-1111-1111-111111111111");
+        var failed = new DownloadQueueItem(request, DownloadStatus.Failed, null, null, Failed().Error, 1, false, true);
+        var store = new FailingQueueStore(1, [failed]);
+        var service = new DownloadQueueService(new FakeDownloadService((_, _, _) =>
+            throw new AssertFailedException("Failed mutation must not start a download.")),
+            store, new ActiveDownloadCoordinator(), new RecordingHistoryService(), TimeProvider.System);
+        await service.InitializeAsync(CancellationToken.None);
+
+        await Assert.ThrowsAsync<IOException>(async () =>
+        {
+            if (retry) await service.RetryAsync(request.Id, CancellationToken.None);
+            else await service.ClearFinishedAsync(CancellationToken.None);
+        });
+        Assert.AreEqual(failed, service.Items.Single());
     }
 
     [TestMethod]
@@ -514,12 +677,12 @@ public sealed class DownloadQueueServiceTests
             CancellationToken cancellationToken) => download(request, progress, cancellationToken);
     }
 
-    private sealed class FailingQueueStore(int failOnSaveCall) : IQueueStore
+    private sealed class FailingQueueStore(int failOnSaveCall, IReadOnlyList<DownloadQueueItem>? initialItems = null) : IQueueStore
     {
         private int saveCalls;
 
         public Task<IReadOnlyList<DownloadQueueItem>> LoadAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<DownloadQueueItem>>([]);
+            Task.FromResult<IReadOnlyList<DownloadQueueItem>>(initialItems ?? []);
 
         public Task SaveAsync(IReadOnlyList<DownloadQueueItem> items, CancellationToken cancellationToken)
         {

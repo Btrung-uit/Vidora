@@ -152,24 +152,112 @@ public sealed class DownloadQueueService(
         }
     }
 
-    public async Task<bool> RemovePendingAsync(Guid taskId, CancellationToken cancellationToken)
+    public async Task<bool> RemoveAsync(Guid taskId, CancellationToken cancellationToken)
     {
         await mutationGate.WaitAsync(cancellationToken);
         try
         {
+            DownloadQueueItem? candidate;
             lock (sync)
             {
-                var index = items.FindIndex(item =>
-                    item.Request.Id == taskId && item.Status == DownloadStatus.Pending);
-                if (index < 0)
+                candidate = items.FirstOrDefault(item =>
+                    item.Request.Id == taskId &&
+                    item.Status is DownloadStatus.Pending or DownloadStatus.Failed);
+            }
+
+            if (candidate is null)
+            {
+                return false;
+            }
+
+            if (candidate.Status == DownloadStatus.Failed && !candidate.IsHistoryRecorded &&
+                !await TryRecordHistoryAsync(candidate, cancellationToken))
+            {
+                return false;
+            }
+
+            lock (sync)
+            {
+                items.RemoveAll(item => item.Request.Id == taskId);
+            }
+
+            await SaveCurrentAsync(cancellationToken);
+        }
+        finally
+        {
+            mutationGate.Release();
+        }
+
+        RaiseChanged();
+        return true;
+    }
+
+    public async Task<bool> RetryAsync(Guid taskId, CancellationToken cancellationToken)
+    {
+        await mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            DownloadQueueItem? failed;
+            lock (sync)
+            {
+                failed = items.FirstOrDefault(item => item.Request.Id == taskId && item.Status == DownloadStatus.Failed);
+            }
+
+            if (failed is null || (!failed.IsHistoryRecorded && !await TryRecordHistoryAsync(failed, cancellationToken)))
+            {
+                return false;
+            }
+
+            var pending = failed with { Status = DownloadStatus.Pending, Progress = null, FinalPath = null, Error = null, IsHistoryRecorded = false };
+            DownloadQueueItem[] snapshot;
+            lock (sync)
+            {
+                snapshot = items.Select(item => item.Request.Id == taskId ? pending : item).ToArray();
+            }
+
+            await queueStore.SaveAsync(snapshot, cancellationToken);
+            lock (sync)
+            {
+                items[items.FindIndex(item => item.Request.Id == taskId)] = pending;
+                paused = false;
+            }
+        }
+        finally
+        {
+            mutationGate.Release();
+        }
+
+        RaiseChanged();
+        StartProcessorIfNeeded();
+        return true;
+    }
+
+    public async Task<bool> ClearFinishedAsync(CancellationToken cancellationToken)
+    {
+        await mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (!await ReconcileHistoryAsync(cancellationToken))
+            {
+                return false;
+            }
+
+            DownloadQueueItem[] remaining;
+            lock (sync)
+            {
+                if (!items.Any(item => IsTerminal(item.Status)))
                 {
                     return false;
                 }
 
-                items.RemoveAt(index);
+                remaining = items.Where(item => !IsTerminal(item.Status)).ToArray();
             }
 
-            await SaveCurrentAsync(cancellationToken);
+            await queueStore.SaveAsync(remaining, cancellationToken);
+            lock (sync)
+            {
+                items.RemoveAll(item => IsTerminal(item.Status));
+            }
         }
         finally
         {

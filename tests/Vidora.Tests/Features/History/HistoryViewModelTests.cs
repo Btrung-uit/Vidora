@@ -14,6 +14,46 @@ public sealed class HistoryViewModelTests
     private static readonly DateTimeOffset Now = new(2026, 11, 1, 11, 0, 0, TimeSpan.Zero);
 
     [TestMethod]
+    public async Task Filters_CombineSearchStatusAndMissingFileWithoutChangingHistory()
+    {
+        var completed = Item() with { Title = "Bài giảng UIT" };
+        var failed = Item() with { TaskId = Guid.NewGuid(), Status = DownloadStatus.Failed, Title = "Bài giảng UIT" };
+        var history = new FakeHistoryService([completed, failed]);
+        var viewModel = CreateViewModel(history: history);
+        await viewModel.InitializeAsync(CancellationToken.None);
+
+        viewModel.SearchText = "  UIT  ";
+        Assert.HasCount(2, viewModel.VisibleItems);
+        viewModel.SelectedStatus = DownloadStatus.Completed;
+        viewModel.MissingFilesOnly = true;
+        Assert.AreEqual(completed.TaskId, viewModel.VisibleItems.Single().Item.TaskId);
+        viewModel.SearchText = "youtu.be/ABC123";
+        Assert.HasCount(1, viewModel.VisibleItems);
+        viewModel.SearchText = "not found";
+        Assert.IsTrue(viewModel.HasNoMatchingItems);
+        Assert.HasCount(2, viewModel.Items);
+        Assert.AreEqual(0, history.ClearCalls);
+    }
+
+    [TestMethod]
+    public async Task QueueRefresh_PreservesSearchAndStatusFilter()
+    {
+        var history = new FakeHistoryService([Item()]);
+        var queue = new FakeQueueService();
+        var viewModel = CreateViewModel(history, queue);
+        await viewModel.InitializeAsync(CancellationToken.None);
+        viewModel.SearchText = "new";
+        viewModel.SelectedStatus = DownloadStatus.Failed;
+        await history.AddAsync(Item() with { TaskId = Guid.NewGuid(), Title = "New video", Status = DownloadStatus.Failed }, CancellationToken.None);
+
+        queue.NotifyChanged();
+
+        Assert.AreEqual("new", viewModel.SearchText);
+        Assert.AreEqual(DownloadStatus.Failed, viewModel.SelectedStatus);
+        Assert.AreEqual("New video", viewModel.VisibleItems.Single().Item.Title);
+    }
+
+    [TestMethod]
     public async Task InitializeAsync_MissingOutput_ComputesMissingWithoutMutatingHistory()
     {
         var item = Item(finalPath: @"Z:\missing\video.mp4");
@@ -473,8 +513,12 @@ public sealed class HistoryViewModelTests
 
         public Task CancelActiveAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task<bool> RemovePendingAsync(Guid taskId, CancellationToken cancellationToken) =>
+        public Task<bool> RemoveAsync(Guid taskId, CancellationToken cancellationToken) =>
             Task.FromResult(false);
+
+        public Task<bool> RetryAsync(Guid taskId, CancellationToken cancellationToken) => Task.FromResult(false);
+
+        public Task<bool> ClearFinishedAsync(CancellationToken cancellationToken) => Task.FromResult(false);
 
         public Task PersistInterruptedAsync(
             Guid taskId,

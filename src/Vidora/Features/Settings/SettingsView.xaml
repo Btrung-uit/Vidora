@@ -19,7 +19,8 @@
         </Style>
     </UserControl.Resources>
 
-    <StackPanel MaxWidth="560">
+    <ScrollViewer x:Name="SettingsScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel MaxWidth="560" Margin="0,0,12,4">
         <TextBlock Margin="0,0,0,8"
                    FontSize="26"
                    FontWeight="SemiBold"
@@ -27,6 +28,19 @@
         <TextBlock Margin="0,0,0,24"
                    Text="{DynamicResource Dependency.Description}"
                    TextWrapping="Wrap" />
+        <TextBlock Margin="0,0,0,16" Padding="12" TextWrapping="Wrap"
+                   Background="{DynamicResource Warning.BackgroundBrush}"
+                   Foreground="{DynamicResource Warning.ForegroundBrush}"
+                   Text="{DynamicResource Dependency.SetupIntro}">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding NeedsSetup}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
         <TextBlock Text="{DynamicResource Settings.Theme}" />
         <ComboBox x:Name="ThemeSelector" AutomationProperties.Name="{DynamicResource Settings.Theme}"
                   SelectedValuePath="Tag" SelectedValue="{Binding Theme, UpdateSourceTrigger=PropertyChanged}">
@@ -60,6 +74,16 @@
             <StackPanel DataContext="{Binding Report.YtDlp}">
                 <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource Dependency.YtDlp}" />
                 <TextBlock Margin="0,4,0,0" Style="{StaticResource DependencyStatusStyle}" />
+                <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Text="{DynamicResource Dependency.YtDlpSetup}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.NeedsYtDlpSetup, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
                 <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
                     <TextBlock Margin="0,0,4,0" Text="{DynamicResource Dependency.Version}" />
                     <TextBlock Text="{Binding Version}" />
@@ -68,6 +92,22 @@
         </Border>
 
         <StackPanel Margin="0,0,0,16">
+            <TextBlock Margin="0,0,0,8" Text="{DynamicResource Dependency.Checking}" AutomationProperties.LiveSetting="Polite">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers><DataTrigger Binding="{Binding IsChecking}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+            <TextBlock Margin="0,0,0,8" Text="{DynamicResource Dependency.Updating}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers><DataTrigger Binding="{Binding IsUpdating}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <StackPanel Orientation="Horizontal">
                 <TextBlock Margin="0,0,4,0" Text="{DynamicResource Dependency.LatestVersion}" />
                 <TextBlock x:Name="LatestYtDlpVersionText" Text="{Binding LatestYtDlpVersion}" />
@@ -100,6 +140,16 @@
             <StackPanel DataContext="{Binding Report.Ffmpeg}">
                 <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource Dependency.Ffmpeg}" />
                 <TextBlock Margin="0,4,0,0" Style="{StaticResource DependencyStatusStyle}" />
+                <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Text="{DynamicResource Dependency.FfmpegSetup}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.NeedsFfmpegSetup, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
                 <StackPanel Margin="0,4,0,0" Orientation="Horizontal">
                     <TextBlock Margin="0,0,4,0" Text="{DynamicResource Dependency.Version}" />
                     <TextBlock Text="{Binding Version}" />
@@ -107,9 +157,10 @@
             </StackPanel>
         </Border>
 
-        <Button HorizontalAlignment="Left"
+        <Button x:Name="CheckDependenciesButton" HorizontalAlignment="Left"
                 Padding="12,8"
                 Content="{DynamicResource Dependency.CheckAgain}"
                 Command="{Binding CheckDependenciesCommand}" />
     </StackPanel>
+    </ScrollViewer>
 </UserControl>

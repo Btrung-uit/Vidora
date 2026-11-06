@@ -33,6 +33,69 @@ public sealed class DownloadViewModelQueueTests
     }
 
     [TestMethod]
+    [DataRow(DownloadStatus.Pending, true)]
+    [DataRow(DownloadStatus.Failed, true)]
+    [DataRow(DownloadStatus.Downloading, false)]
+    [DataRow(DownloadStatus.Completed, false)]
+    [DataRow(DownloadStatus.Cancelled, false)]
+    [DataRow(DownloadStatus.Interrupted, false)]
+    public void RemoveCommand_OnlyPendingAndFailedItemsCanBeRemoved(DownloadStatus status, bool expected)
+    {
+        var viewModel = CreateViewModel(new FakeQueueService(), new FakeSettingsService(new AppSettings(null)));
+        var item = new DownloadQueueItem(Request(Guid.NewGuid(), @"C:\Videos"), status, null, null, null, 1, false);
+
+        Assert.AreEqual(expected, viewModel.RemoveCommand.CanExecute(item));
+        Assert.IsFalse(viewModel.RemoveCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public async Task QueueActions_RetryAndClear_ForwardToServiceAndShowPersistenceFailure()
+    {
+        var queue = new FakeQueueService();
+        var viewModel = CreateViewModel(queue, new FakeSettingsService(new AppSettings(null)));
+        var failed = new DownloadQueueItem(Request(Guid.NewGuid(), @"C:\Videos"), DownloadStatus.Failed, null, null, null, 1, false);
+        queue.Add(failed);
+
+        Assert.IsTrue(viewModel.RetryQueueItemCommand.CanExecute(failed));
+        Assert.IsFalse(viewModel.RetryQueueItemCommand.CanExecute(failed with { Status = DownloadStatus.Downloading }));
+        await viewModel.RetryQueueItemCommand.ExecuteAsync(failed);
+        Assert.AreEqual(failed.Request.Id, queue.RetriedId);
+        Assert.IsTrue(viewModel.ClearFinishedCommand.CanExecute(null));
+        await viewModel.ClearFinishedCommand.ExecuteAsync(null);
+        Assert.AreEqual(1, queue.ClearCalls);
+        Assert.IsTrue(viewModel.HasQueueOperationError);
+    }
+
+    [TestMethod]
+    public async Task OpenCompletedOutput_UsesExistingPathsAndHandlesShellFailure()
+    {
+        using var directory = new TemporaryDirectory();
+        var file = Path.Combine(directory.Path, "video.mp4");
+        await File.WriteAllTextAsync(file, "keep");
+        var queue = new FakeQueueService();
+        var opened = new List<string>();
+        var viewModel = new DownloadViewModel(new FakeDiscoveryService(), queue,
+            new FakeSettingsService(new AppSettings(null)), new FixedTimeProvider(Now),
+            openPath: path => opened.Add(path));
+        var completed = new DownloadQueueItem(Request(Guid.NewGuid(), directory.Path), DownloadStatus.Completed, null, file, null, 1, false);
+
+        viewModel.OpenQueueFileCommand.Execute(completed);
+        viewModel.OpenQueueFolderCommand.Execute(completed);
+        CollectionAssert.AreEqual(new[] { file, directory.Path }, opened);
+        File.Delete(file);
+        Assert.IsFalse(viewModel.OpenQueueFileCommand.CanExecute(completed));
+        viewModel.OpenQueueFileCommand.Execute(completed);
+        Assert.HasCount(2, opened);
+        Assert.IsTrue(viewModel.HasQueueOperationError);
+
+        var failing = new DownloadViewModel(new FakeDiscoveryService(), queue,
+            new FakeSettingsService(new AppSettings(null)), new FixedTimeProvider(Now),
+            openPath: _ => throw new System.ComponentModel.Win32Exception("No association"));
+        failing.OpenQueueFolderCommand.Execute(completed);
+        Assert.IsTrue(failing.HasQueueOperationError);
+    }
+
+    [TestMethod]
     public async Task InitializeAsync_ExistingLastDestination_RestoresSelection()
     {
         using var directory = new TemporaryDirectory();
@@ -66,6 +129,32 @@ public sealed class DownloadViewModelQueueTests
         context.Drain();
         Assert.HasCount(1, viewModel.QueueItems);
         Assert.AreEqual(item.Request.Id, viewModel.QueueItems[0].Request.Id);
+    }
+
+    [STATestMethod]
+    [DoNotParallelize]
+    [DataRow(DownloadStatus.Failed)]
+    [DataRow(DownloadStatus.Completed)]
+    public void DownloadView_QueueActions_BindToTheMatchingRow(DownloadStatus status)
+    {
+        var queue = new FakeQueueService();
+        var viewModel = CreateViewModel(queue, new FakeSettingsService(new AppSettings(null)));
+        var item = new DownloadQueueItem(Request(Guid.NewGuid(), @"C:\Videos"), status, null, null, null, 1, false);
+        queue.Add(item);
+        var view = CreateView(viewModel, 480, 360);
+        var list = (ItemsControl)view.FindName("QueueList");
+        var presenter = (ContentPresenter)list.ItemContainerGenerator.ContainerFromIndex(0);
+        var retry = (Button)list.ItemTemplate.FindName("RetryQueueItemButton", presenter);
+        var open = (Button)list.ItemTemplate.FindName("OpenQueueFileButton", presenter);
+
+        Assert.AreEqual(viewModel.RetryQueueItemCommand, retry.Command);
+        Assert.AreEqual(item, retry.CommandParameter);
+        Assert.AreEqual(status == DownloadStatus.Failed ? Visibility.Visible : Visibility.Collapsed, retry.Visibility);
+        Assert.AreEqual(viewModel.OpenQueueFileCommand, open.Command);
+        Assert.AreEqual(status == DownloadStatus.Completed ? Visibility.Visible : Visibility.Collapsed, open.Visibility);
+        Assert.AreEqual(viewModel.ClearFinishedCommand, ((Button)view.FindName("ClearFinishedButton")).Command);
+        var outerScroll = (ScrollViewer)view.FindName("DownloadScrollViewer");
+        Assert.IsGreaterThan(0, outerScroll.ScrollableHeight);
     }
 
     [STATestMethod]
@@ -208,6 +297,10 @@ public sealed class DownloadViewModelQueueTests
 
         public List<DownloadRequest> Enqueued { get; } = [];
 
+        public Guid? RetriedId { get; private set; }
+
+        public int ClearCalls { get; private set; }
+
         public event EventHandler? Changed;
 
         public Task InitializeAsync(CancellationToken cancellationToken) => Task.CompletedTask;
@@ -223,8 +316,20 @@ public sealed class DownloadViewModelQueueTests
 
         public Task CancelActiveAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task<bool> RemovePendingAsync(Guid taskId, CancellationToken cancellationToken) =>
+        public Task<bool> RemoveAsync(Guid taskId, CancellationToken cancellationToken) =>
             Task.FromResult(false);
+
+        public Task<bool> RetryAsync(Guid taskId, CancellationToken cancellationToken)
+        {
+            RetriedId = taskId;
+            return Task.FromResult(true);
+        }
+
+        public Task<bool> ClearFinishedAsync(CancellationToken cancellationToken)
+        {
+            ClearCalls++;
+            throw new IOException("Queue locked");
+        }
 
         public Task PersistInterruptedAsync(
             Guid taskId,

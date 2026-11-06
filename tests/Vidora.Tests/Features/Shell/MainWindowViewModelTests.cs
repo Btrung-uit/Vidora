@@ -65,8 +65,15 @@ public sealed class MainWindowViewModelTests
     {
         if (Application.Current is null)
         {
-            var application = new App();
-            application.InitializeComponent();
+            var application = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            application.Resources.MergedDictionaries.Add(new ResourceDictionary
+            {
+                Source = new Uri("/Vidora;component/Resources/Themes.xaml", UriKind.Relative)
+            });
+            application.Resources.MergedDictionaries.Add(new ResourceDictionary
+            {
+                Source = new Uri("/Vidora;component/Resources/Strings.vi-VN.xaml", UriKind.Relative)
+            });
         }
 
         var shellViewModel = new MainWindowViewModel();
@@ -165,7 +172,11 @@ public sealed class MainWindowViewModelTests
 
         public Task CancelActiveAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task<bool> RemovePendingAsync(Guid taskId, CancellationToken cancellationToken) => Task.FromResult(false);
+        public Task<bool> RemoveAsync(Guid taskId, CancellationToken cancellationToken) => Task.FromResult(false);
+
+        public Task<bool> RetryAsync(Guid taskId, CancellationToken cancellationToken) => Task.FromResult(false);
+
+        public Task<bool> ClearFinishedAsync(CancellationToken cancellationToken) => Task.FromResult(false);
 
         public Task PersistInterruptedAsync(Guid taskId, DownloadResult result, CancellationToken cancellationToken) =>
             Task.CompletedTask;
