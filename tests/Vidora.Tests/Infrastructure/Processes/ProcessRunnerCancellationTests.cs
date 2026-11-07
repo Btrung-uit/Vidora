@@ -9,37 +9,57 @@ public sealed class ProcessRunnerCancellationTests
     [TestMethod]
     public async Task RunAsync_Cancellation_KillsEntireProcessTreeWithinFiveSeconds()
     {
-        var childReady = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var directory = Directory.CreateTempSubdirectory("vidora-cancel-test-");
+        var survivedMarker = Path.Combine(directory.FullName, "survived.txt");
+        var childScript = Path.Combine(directory.FullName, "child.cmd");
+        var parentScript = Path.Combine(directory.FullName, "parent.cmd");
+        await File.WriteAllTextAsync(
+            childScript,
+            "@echo off\r\n" +
+            "echo VIDORA_CHILD_READY\r\n" +
+            "ping.exe -n 3 127.0.0.1 >nul\r\n" +
+            $"echo survived>\"{survivedMarker}\"\r\n");
+        await File.WriteAllTextAsync(
+            parentScript,
+            "@echo off\r\n" +
+            $"cmd.exe /d /s /c \"\"{childScript}\"\"\r\n");
+        var childReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var output = new ImmediateProgress<ProcessOutputLine>(line =>
         {
-            const string prefix = "VIDORA_CHILD:";
-            if (line.Text.StartsWith(prefix, StringComparison.Ordinal) &&
-                int.TryParse(line.Text[prefix.Length..], out var processId))
+            if (line.Text == "VIDORA_CHILD_READY")
             {
-                childReady.TrySetResult(processId);
+                childReady.TrySetResult();
             }
         });
         var spec = new ProcessSpec(
-            "powershell.exe",
+            Environment.GetEnvironmentVariable("ComSpec")!,
             [
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "$child = Start-Process -FilePath $env:ComSpec -ArgumentList '/d','/c','ping -n 31 127.0.0.1 > nul' -WindowStyle Hidden -PassThru; " +
-                "Write-Output ('VIDORA_CHILD:' + $child.Id); Wait-Process -Id $child.Id"
+                "/d",
+                "/s",
+                "/c",
+                parentScript
             ]);
         using var cancellation = new CancellationTokenSource();
-        var run = new ProcessRunner().RunAsync(spec, output, cancellation.Token);
-        var childId = await childReady.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        using var child = Process.GetProcessById(childId);
+        try
+        {
+            var run = new ProcessRunner().RunAsync(spec, output, cancellation.Token);
+            await childReady.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var stopwatch = Stopwatch.StartNew();
 
-        cancellation.Cancel();
+            cancellation.Cancel();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(
-            () => run.WaitAsync(TimeSpan.FromSeconds(5)));
-        await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.IsTrue(child.HasExited);
+            await Assert.ThrowsAsync<OperationCanceledException>(
+                () => run.WaitAsync(TimeSpan.FromSeconds(5)));
+            stopwatch.Stop();
+            await Task.Delay(TimeSpan.FromSeconds(2.5));
+
+            Assert.IsTrue(stopwatch.Elapsed < TimeSpan.FromSeconds(5));
+            Assert.IsFalse(File.Exists(survivedMarker), "A descendant continued after process-tree cancellation.");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     private sealed class ImmediateProgress<T>(Action<T> report) : IProgress<T>
